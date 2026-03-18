@@ -67,6 +67,9 @@ def run_benchmark(
 
     loop.run_until_complete(_load_data())
 
+    logger.info("[%s] flushing backend...", bench_name)
+    loop.run_until_complete(backend.flush())
+
     logger.info("[%s] starting benchmark...", bench_name)
 
     async def bench_read() -> None:

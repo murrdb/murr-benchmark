@@ -21,6 +21,8 @@ async def roundtrip(backend: Backend) -> None:
     for batch in generate_batches(schema, config.total_rows, config.write_batch_size):
         await backend.write_batch(batch)
 
+    await backend.flush()
+
     keys = [str(i) for i in range(config.select_rows)]
     columns = column_names(config.select_cols)
     df = await backend.read(keys, columns)

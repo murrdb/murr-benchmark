@@ -91,6 +91,10 @@ class PgFeast(Backend):
             rows = await cur.fetchall()
         return pd.DataFrame(rows, columns=columns)
 
+    async def flush(self) -> None:
+        assert self._conn is not None
+        await self._conn.execute("CHECKPOINT")
+
     async def cleanup(self) -> None:
         if self._conn is not None:
             await self._conn.close()
@@ -137,6 +141,10 @@ class PgFeatureBlob(Backend):
             [np.frombuffer(row[1], dtype="<f4") for row in rows]
         )
         return pd.DataFrame(data, columns=columns)
+
+    async def flush(self) -> None:
+        assert self._conn is not None
+        await self._conn.execute("CHECKPOINT")
 
     async def cleanup(self) -> None:
         if self._conn is not None:

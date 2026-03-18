@@ -20,5 +20,8 @@ class Backend(ABC):
     @abstractmethod
     async def read(self, keys: list[str], columns: list[str]) -> pd.DataFrame: ...
 
+    async def flush(self) -> None:
+        pass
+
     @abstractmethod
     async def cleanup(self) -> None: ...

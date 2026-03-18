@@ -42,6 +42,11 @@ class RocksDb(Backend):
         )
         return pd.DataFrame(rows, columns=columns)
 
+    async def flush(self) -> None:
+        assert self._db is not None
+        self._db.flush()
+        self._db.compact_range(None, None)
+
     async def cleanup(self) -> None:
         if self._db is not None:
             self._db.close()
