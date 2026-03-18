@@ -11,17 +11,22 @@ criterion = { version = "0.8", features = ["html_reports", "async_tokio"] }
 rand = "0.10"
 redis = { version = "1.0", features = ["tokio-comp", "connection-manager"] }
 testcontainers = "0.27"
-testcontainers-modules = { version = "0.15", features = ["redis"] }
+murr = { git = "https://github.com/murrdb/murr", features = ["testutil"] }
 reqwest = { version = "0.13", features = ["json"] }
+log = "0.4"
+env_logger = "0.11"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 arrow = { version = "58", default-features = true, features = ["ipc"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 tempfile = "3"
+bollard = "0.20"
+futures-util = "0.3"
+libc = "0.2"
 
 [[bench]]
-name = "http_bench"
+name = "murrdb_http_bench"
 harness = false
 
 [[bench]]
@@ -30,6 +35,10 @@ harness = false
 
 [[bench]]
 name = "redis_feast_bench"
+harness = false
+
+[[bench]]
+name = "murr_embed_bench"
 harness = false
 
 [profile.bench]

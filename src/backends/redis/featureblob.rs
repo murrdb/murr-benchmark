@@ -22,8 +22,8 @@ impl Backend for RedisFeatureBlob {
     type Config = RedisFeatureBlobConfig;
     type Response = Vec<Option<Vec<u8>>>;
 
-    async fn init(_config: &BenchConfig<Self::Config>) -> Self {
-        let redis = RedisContainer::start().await;
+    async fn init(config: &BenchConfig<Self::Config>) -> Self {
+        let redis = RedisContainer::start(&config.backend.image).await;
         RedisFeatureBlob { redis }
     }
 
@@ -45,6 +45,10 @@ impl Backend for RedisFeatureBlob {
     async fn read(&self, keys: &[String], _columns: &[String]) -> Self::Response {
         let mut con = self.redis.con.clone();
         con.mget(keys).await.unwrap()
+    }
+
+    async fn memory_usage(&self) -> crate::backend::MemoryUsage {
+        crate::stats::mem::MemoryUsage::for_container(self.redis._container.id()).await
     }
 
     async fn cleanup(self) {

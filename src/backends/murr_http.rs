@@ -59,7 +59,7 @@ impl Backend for MurrHttp {
 
         let container = GenericImage::new(image_name, image_tag)
             .with_exposed_port(MURR_PORT.into())
-            .with_wait_for(testcontainers::core::WaitFor::message_on_stderr("listening"))
+            .with_wait_for(testcontainers::core::WaitFor::message_on_stderr("Starting murr"))
             .start()
             .await
             .expect("failed to start murrdb container");
@@ -140,6 +140,10 @@ impl Backend for MurrHttp {
             .await
             .unwrap();
         resp.bytes().await.unwrap().to_vec()
+    }
+
+    async fn memory_usage(&self) -> crate::stats::mem::MemoryUsage {
+        crate::stats::mem::MemoryUsage::for_container(self._container.id()).await
     }
 
     async fn cleanup(self) {

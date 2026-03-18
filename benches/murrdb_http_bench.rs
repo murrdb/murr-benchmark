@@ -7,7 +7,7 @@ fn bench_http(c: &mut criterion::Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    Bench::run::<MurrHttp>(c, "configs/murr_http.yaml", "http", &rt);
+    Bench::run::<MurrHttp>(c, "configs/murr_http.yaml", "murr_http", &rt);
 }
 
 criterion_group!(benches, bench_http);

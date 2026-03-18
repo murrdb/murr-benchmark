@@ -33,7 +33,7 @@ impl Backend for RedisFeast {
     type Response = Vec<HashMap<String, Vec<u8>>>;
 
     async fn init(config: &BenchConfig<Self::Config>) -> Self {
-        let redis = RedisContainer::start().await;
+        let redis = RedisContainer::start(&config.backend.image).await;
         RedisFeast {
             redis,
             read_mode: config.backend.read_mode.clone(),
@@ -87,6 +87,10 @@ impl Backend for RedisFeast {
                     .collect()
             }
         }
+    }
+
+    async fn memory_usage(&self) -> crate::backend::MemoryUsage {
+        crate::stats::mem::MemoryUsage::for_container(self.redis._container.id()).await
     }
 
     async fn cleanup(self) {
