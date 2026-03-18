@@ -93,6 +93,10 @@ impl Backend for RedisFeast {
         crate::stats::mem::MemoryUsage::for_container(self.redis._container.id()).await
     }
 
+    async fn disk_usage(&self) -> crate::backend::DiskUsage {
+        crate::stats::disk::DiskUsage::for_container(self.redis._container.id()).await
+    }
+
     async fn cleanup(self) {
         drop(self.redis);
     }

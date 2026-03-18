@@ -40,6 +40,8 @@ impl Bench {
 
         let mem_before = rt.block_on(backend.memory_usage());
         info!("[{group_name}] memory before load: {:?}", mem_before);
+        let disk_before = rt.block_on(backend.disk_usage());
+        info!("[{group_name}] disk before load:   {:?}", disk_before);
 
         let columns = testdata::column_names(config.select_cols);
         let schema = testdata::make_schema(config.select_cols);
@@ -71,6 +73,9 @@ impl Bench {
         let mem_after = rt.block_on(backend.memory_usage());
         info!("[{group_name}] memory after load:  {:?}", mem_after);
         info!("[{group_name}] memory delta:       {:?}", mem_before.diff(&mem_after));
+        let disk_after = rt.block_on(backend.disk_usage());
+        info!("[{group_name}] disk after load:    {:?}", disk_after);
+        info!("[{group_name}] disk delta:         {:?}", disk_before.diff(&disk_after));
 
         let total_rows = config.total_rows;
         let select_rows = config.select_rows;

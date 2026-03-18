@@ -146,6 +146,10 @@ impl Backend for MurrHttp {
         crate::stats::mem::MemoryUsage::for_container(self._container.id()).await
     }
 
+    async fn disk_usage(&self) -> crate::stats::disk::DiskUsage {
+        crate::stats::disk::DiskUsage::for_container(self._container.id()).await
+    }
+
     async fn cleanup(self) {
         drop(self._container);
     }

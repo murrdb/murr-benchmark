@@ -1,9 +1,9 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use arrow::record_batch::RecordBatch;
 use serde::Deserialize;
-use tempfile::TempDir;
 
 use murr::conf::{Config, StorageConfig};
 use murr::core::{ColumnSchema, DType, TableSchema};
@@ -14,14 +14,16 @@ use crate::config::{BackendConfig, BenchConfig};
 use crate::testdata;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct MurrEmbedConfig {}
+pub struct MurrEmbedConfig {
+    pub data_dir: PathBuf,
+}
 
 impl BackendConfig for MurrEmbedConfig {}
 
 #[derive(Clone)]
 pub struct MurrEmbed {
     svc: Arc<MurrService>,
-    _dir: Arc<TempDir>,
+    data_dir: PathBuf,
 }
 
 impl MurrEmbed {
@@ -55,10 +57,12 @@ impl Backend for MurrEmbed {
     type Response = RecordBatch;
 
     async fn init(config: &BenchConfig<Self::Config>) -> Self {
-        let dir = TempDir::new().unwrap();
+        let data_dir = &config.backend.data_dir;
+        std::fs::create_dir_all(data_dir).expect("failed to create data_dir");
+
         let murr_config = Config {
             storage: StorageConfig {
-                cache_dir: dir.path().to_path_buf(),
+                cache_dir: data_dir.clone(),
             },
             ..Config::default()
         };
@@ -69,7 +73,7 @@ impl Backend for MurrEmbed {
 
         MurrEmbed {
             svc: Arc::new(svc),
-            _dir: Arc::new(dir),
+            data_dir: data_dir.clone(),
         }
     }
 
@@ -87,9 +91,13 @@ impl Backend for MurrEmbed {
         crate::stats::mem::MemoryUsage::for_process()
     }
 
+    async fn disk_usage(&self) -> crate::backend::DiskUsage {
+        crate::stats::disk::DiskUsage::for_path(&self.data_dir)
+    }
+
     async fn cleanup(self) {
         drop(self.svc);
-        drop(self._dir);
+        let _ = std::fs::remove_dir_all(&self.data_dir);
     }
 }
 
@@ -98,9 +106,11 @@ mod tests {
     use super::*;
     use crate::config::BenchConfig;
     use crate::testing::test_backend_roundtrip;
+    use tempfile::TempDir;
 
     #[tokio::test]
     async fn roundtrip() {
+        let dir = TempDir::new().unwrap();
         let config = BenchConfig {
             total_rows: 100,
             select_rows: 10,
@@ -109,7 +119,9 @@ mod tests {
             measurement_time_secs: 1,
             warmup_time_secs: 1,
             sample_size: 1,
-            backend: MurrEmbedConfig {},
+            backend: MurrEmbedConfig {
+                data_dir: dir.path().to_path_buf(),
+            },
         };
         test_backend_roundtrip::<MurrEmbed>(config).await;
     }

@@ -5,4 +5,5 @@ write_batch_size: 10000000
 measurement_time_secs: 10
 warmup_time_secs: 2
 sample_size: 10
-backend: {}
+backend:
+  data_dir: /tmp/murr-bench

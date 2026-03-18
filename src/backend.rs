@@ -3,6 +3,7 @@ use arrow::datatypes::Float32Type;
 use arrow::record_batch::RecordBatch;
 
 use crate::config::{BackendConfig, BenchConfig};
+pub use crate::stats::disk::DiskUsage;
 pub use crate::stats::mem::MemoryUsage;
 
 /// A pre-processed batch of test data ready for backend ingestion.
@@ -44,6 +45,9 @@ pub trait Backend: Sized + Send + Sync + Clone {
 
     /// Report current memory usage (RSS, shared, virtual).
     fn memory_usage(&self) -> impl Future<Output = MemoryUsage> + Send;
+
+    /// Report current disk usage.
+    fn disk_usage(&self) -> impl Future<Output = DiskUsage> + Send;
 
     /// Stop containers, close connections.
     fn cleanup(self) -> impl Future<Output = ()> + Send;
