@@ -1,5 +1,5 @@
 use std::hint::black_box;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use arrow::array::AsArray;
 use criterion::{BenchmarkId, Criterion, Throughput};
@@ -51,6 +51,7 @@ impl Bench {
             config.total_rows
         );
 
+        let mut last_log = Instant::now();
         for (i, record_batch) in
             testdata::generate_batches(&schema, config.total_rows, config.write_batch_size)
                 .enumerate()
@@ -67,7 +68,10 @@ impl Bench {
                 columns: columns.clone(),
             };
             rt.block_on(backend.write_batch(&batch));
-            info!("[{group_name}] wrote batch {}/{num_batches}", i + 1);
+            if i + 1 == num_batches || last_log.elapsed() >= Duration::from_secs(5) {
+                info!("[{group_name}] wrote batch {}/{num_batches}", i + 1);
+                last_log = Instant::now();
+            }
         }
 
         let mem_after = rt.block_on(backend.memory_usage());

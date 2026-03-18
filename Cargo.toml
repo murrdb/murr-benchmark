@@ -25,6 +25,7 @@ bollard = "0.20"
 futures-util = "0.3"
 libc = "0.2"
 rocksdb = "0.24"
+tokio-postgres = "0.7"
 
 [[bench]]
 name = "murrdb_http_bench"
@@ -44,6 +45,14 @@ harness = false
 
 [[bench]]
 name = "rocksdb_bench"
+harness = false
+
+[[bench]]
+name = "pg_featureblob_bench"
+harness = false
+
+[[bench]]
+name = "pg_feast_bench"
 harness = false
 
 [profile.bench]
