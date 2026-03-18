@@ -28,31 +28,31 @@ rocksdb = "0.24"
 tokio-postgres = "0.7"
 
 [[bench]]
-name = "murrdb_http_bench"
+name = "murrdb_http"
 harness = false
 
 [[bench]]
-name = "redis_featureblob_bench"
+name = "redis_featureblob"
 harness = false
 
 [[bench]]
-name = "redis_feast_bench"
+name = "redis_feast"
 harness = false
 
 [[bench]]
-name = "murr_embed_bench"
+name = "murr_embed"
 harness = false
 
 [[bench]]
-name = "rocksdb_bench"
+name = "rocksdb"
 harness = false
 
 [[bench]]
-name = "pg_featureblob_bench"
+name = "pg_featureblob"
 harness = false
 
 [[bench]]
-name = "pg_feast_bench"
+name = "pg_feast"
 harness = false
 
 [profile.bench]

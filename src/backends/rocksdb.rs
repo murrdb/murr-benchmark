@@ -54,6 +54,8 @@ impl Backend for RocksDb {
 
     async fn flush(&self) {
         self.db.flush().expect("failed to flush RocksDB");
+        self.db
+            .compact_range::<&[u8], &[u8]>(None, None);
     }
 
     async fn read(&self, keys: &[String], _columns: &[String]) -> Self::Response {

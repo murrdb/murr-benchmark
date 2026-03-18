@@ -51,6 +51,7 @@ impl Bench {
             config.total_rows
         );
 
+        let ingest_start = Instant::now();
         let mut last_log = Instant::now();
         for (i, record_batch) in
             testdata::generate_batches(&schema, config.total_rows, config.write_batch_size)
@@ -75,6 +76,12 @@ impl Bench {
         }
 
         rt.block_on(backend.flush());
+        let ingest_elapsed = ingest_start.elapsed();
+        info!(
+            "[{group_name}] ingest total: {:.2?} ({:.0} rows/s)",
+            ingest_elapsed,
+            config.total_rows as f64 / ingest_elapsed.as_secs_f64()
+        );
 
         let mem_after = rt.block_on(backend.memory_usage());
         info!("[{group_name}] memory after load:  {:?}", mem_after);

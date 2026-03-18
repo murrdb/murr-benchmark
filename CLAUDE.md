@@ -14,7 +14,7 @@ cargo bench --bench <name>       # run a single benchmark
 cargo bench --bench <name> -- --help  # criterion CLI options
 ```
 
-Benchmark names: `http_bench`, `redis_feast_bench`, `redis_featureblob_bench`.
+Benchmark names: `murrdb_http`, `murr_embed`, `redis_feast`, `redis_featureblob`, `rocksdb`, `pg_feast`, `pg_featureblob`.
 
 All benchmarks require Docker running locally — they use `testcontainers` to spin up backend containers.
 
