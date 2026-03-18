@@ -9,6 +9,8 @@ use testcontainers::core::ContainerAsync;
 use testcontainers::runners::AsyncRunner;
 use tokio_postgres::NoTls;
 
+use crate::stats::disk::DiskUsage;
+
 const PG_PORT: u16 = 5432;
 
 /// Shared Postgres container + client wrapper.
@@ -56,6 +58,18 @@ impl PgContainer {
         Self {
             client: Arc::new(client),
             _container: Arc::new(container),
+        }
+    }
+
+    pub async fn disk_usage(&self) -> DiskUsage {
+        let row = self
+            .client
+            .query_one("SELECT pg_database_size('bench')", &[])
+            .await
+            .expect("failed to query pg_database_size");
+        let used_bytes: i64 = row.get(0);
+        DiskUsage {
+            used_bytes: used_bytes as u64,
         }
     }
 }

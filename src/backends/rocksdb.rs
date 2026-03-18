@@ -52,6 +52,10 @@ impl Backend for RocksDb {
         self.db.write(wb).expect("failed to write batch");
     }
 
+    async fn flush(&self) {
+        self.db.flush().expect("failed to flush RocksDB");
+    }
+
     async fn read(&self, keys: &[String], _columns: &[String]) -> Self::Response {
         self.db
             .multi_get(keys.iter().map(|k| k.as_bytes()))

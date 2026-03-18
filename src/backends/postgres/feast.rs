@@ -80,6 +80,10 @@ impl Backend for PgFeast {
         self.pg.client.execute(&sql, &params).await.unwrap();
     }
 
+    async fn flush(&self) {
+        self.pg.client.execute("CHECKPOINT", &[]).await.expect("checkpoint failed");
+    }
+
     async fn read(&self, keys: &[String], columns: &[String]) -> Self::Response {
         let col_list = columns.join(", ");
         let sql = format!("SELECT {col_list} FROM bench WHERE key = ANY($1)");
@@ -95,7 +99,7 @@ impl Backend for PgFeast {
     }
 
     async fn disk_usage(&self) -> crate::backend::DiskUsage {
-        crate::stats::disk::DiskUsage::for_container(self.pg._container.id()).await
+        self.pg.disk_usage().await
     }
 
     async fn cleanup(self) {

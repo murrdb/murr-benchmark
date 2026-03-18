@@ -49,6 +49,12 @@ pub trait Backend: Sized + Send + Sync + Clone {
     /// Report current disk usage.
     fn disk_usage(&self) -> impl Future<Output = DiskUsage> + Send;
 
+    /// Flush all buffered writes to durable storage.
+    /// Called after all write_batch calls, before disk_usage is measured.
+    fn flush(&self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
     /// Stop containers, close connections.
     fn cleanup(self) -> impl Future<Output = ()> + Send;
 }

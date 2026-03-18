@@ -44,6 +44,7 @@ pub fn generate_batches(
         let start = batch_idx * batch_size;
         let end = (start + batch_size).min(total_rows);
         let len = end - start;
+        let mut rng = rand::rng();
 
         let keys: StringArray = (start..end).map(|i| Some(i.to_string())).collect();
 
@@ -51,7 +52,7 @@ pub fn generate_batches(
         columns.push(Arc::new(keys));
 
         for _ in 0..num_cols {
-            let values: Float32Array = (start..end).map(|i| Some(i as f32)).collect();
+            let values: Float32Array = (start..end).map(|_| Some(rng.random::<f32>())).collect();
             columns.push(Arc::new(values));
         }
 

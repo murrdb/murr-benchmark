@@ -74,6 +74,8 @@ impl Bench {
             }
         }
 
+        rt.block_on(backend.flush());
+
         let mem_after = rt.block_on(backend.memory_usage());
         info!("[{group_name}] memory after load:  {:?}", mem_after);
         info!("[{group_name}] memory delta:       {:?}", mem_before.diff(&mem_after));
