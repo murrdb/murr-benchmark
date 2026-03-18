@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow as pa
 import redis.asyncio as aioredis
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.waiting_utils import wait_for_logs
+from testcontainers.core.wait_strategies import LogMessageWaitStrategy
 
 from murr_bench.backend import Backend
 from murr_bench.config import RedisFeastConfig, RedisFeatureBlobConfig
@@ -29,8 +29,8 @@ class RedisFeast(Backend):
             DockerContainer(self.config.backend.image)
             .with_exposed_ports(REDIS_PORT)
         )
+        self._container.waiting_for(LogMessageWaitStrategy("Ready to accept connections"))
         self._container.start()
-        wait_for_logs(self._container, "Ready to accept connections")
         host = self._container.get_container_host_ip()
         port = self._container.get_exposed_port(REDIS_PORT)
         self._redis = aioredis.from_url(f"redis://{host}:{port}")
@@ -97,8 +97,8 @@ class RedisFeatureBlob(Backend):
             DockerContainer(self.config.backend.image)
             .with_exposed_ports(REDIS_PORT)
         )
+        self._container.waiting_for(LogMessageWaitStrategy("Ready to accept connections"))
         self._container.start()
-        wait_for_logs(self._container, "Ready to accept connections")
         host = self._container.get_container_host_ip()
         port = self._container.get_exposed_port(REDIS_PORT)
         self._redis = aioredis.from_url(f"redis://{host}:{port}")

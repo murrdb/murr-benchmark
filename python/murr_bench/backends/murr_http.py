@@ -6,7 +6,7 @@ import pandas as pd
 import pyarrow as pa
 from murr import MurrClientAsync, TableSchema, ColumnSchema, DType
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.waiting_utils import wait_for_logs
+from testcontainers.core.wait_strategies import LogMessageWaitStrategy
 
 from murr_bench.backend import Backend
 from murr_bench.config import MurrHttpConfig
@@ -28,8 +28,8 @@ class MurrHttp(Backend):
             DockerContainer(self.config.backend.image)
             .with_exposed_ports(MURR_PORT)
         )
+        self._container.waiting_for(LogMessageWaitStrategy("Starting murr"))
         self._container.start()
-        wait_for_logs(self._container, "Starting murr")
 
         host = self._container.get_container_host_ip()
         port = self._container.get_exposed_port(MURR_PORT)

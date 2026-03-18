@@ -8,7 +8,7 @@ import pandas as pd
 import psycopg
 import pyarrow as pa
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.waiting_utils import wait_for_logs
+from testcontainers.core.wait_strategies import LogMessageWaitStrategy
 
 from murr_bench.backend import Backend
 from murr_bench.config import PgFeastConfig, PgFeatureBlobConfig
@@ -25,8 +25,8 @@ async def _start_pg(image: str) -> tuple[DockerContainer, psycopg.AsyncConnectio
         .with_env("POSTGRES_PASSWORD", "bench")
         .with_env("POSTGRES_DB", "bench")
     )
+    container.waiting_for(LogMessageWaitStrategy("database system is ready to accept connections"))
     container.start()
-    wait_for_logs(container, "database system is ready to accept connections")
 
     host = container.get_container_host_ip()
     port = container.get_exposed_port(PG_PORT)
