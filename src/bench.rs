@@ -110,6 +110,10 @@ impl Bench {
         );
         group.finish();
 
+        let mem_bench = rt.block_on(backend.memory_usage());
+        info!("[{group_name}] memory after bench: {:?}", mem_bench);
+        info!("[{group_name}] memory delta (bench): {:?}", mem_after.diff(&mem_bench));
+
         info!("[{group_name}] cleaning up...");
         rt.block_on(backend.cleanup());
         info!("[{group_name}] done");
