@@ -13,6 +13,16 @@ from murr_bench.testdata import column_names, generate_batches, generate_random_
 logger = logging.getLogger(__name__)
 
 
+class PersistentEventLoop(asyncio.SelectorEventLoop):
+    """Event loop that ignores close() — for reuse across pyperf iterations."""
+
+    def close(self) -> None:
+        pass
+
+    def real_close(self) -> None:
+        super().close()
+
+
 def run_benchmark(
     backend: Backend,
     bench_name: str,
@@ -24,13 +34,16 @@ def run_benchmark(
                 bench_name, config.total_rows, config.select_rows,
                 config.select_cols, config.write_batch_size)
 
-    logger.info("[%s] initializing backend...", bench_name)
-    asyncio.run(backend.init())
-    logger.info("[%s] backend ready", bench_name)
-
     columns = column_names(config.select_cols)
     schema = make_schema(config.select_cols)
     num_batches = -(-config.total_rows // config.write_batch_size)  # ceil div
+
+    loop = PersistentEventLoop()
+    asyncio.set_event_loop(loop)
+
+    logger.info("[%s] initializing backend...", bench_name)
+    loop.run_until_complete(backend.init())
+    logger.info("[%s] backend ready", bench_name)
 
     logger.info("[%s] writing %d rows in %d batches...",
                 bench_name, config.total_rows, num_batches)
@@ -52,7 +65,7 @@ def run_benchmark(
                     bench_name, ingest_elapsed,
                     config.total_rows / ingest_elapsed)
 
-    asyncio.run(_load_data())
+    loop.run_until_complete(_load_data())
 
     logger.info("[%s] starting benchmark...", bench_name)
 
@@ -60,11 +73,16 @@ def run_benchmark(
         keys = generate_random_keys(config.select_rows, config.total_rows)
         await backend.read(keys, columns)
 
+    # Match Criterion's time-based approach: each sample ≈ measurement_time / sample_size
+    # With --loops=N, pyperf runs N iterations per sample and reports the average.
+    loops = max(1, config.measurement_time_secs * 100 // config.sample_size)
+
     pyperf_cli = [
-        f"--warmup-time={config.warmup_time_secs}",
         f"--values={config.sample_size}",
-        f"--min-time={config.measurement_time_secs}",
-        "--processes=1",
+        f"--warmups={config.warmup_time_secs}",
+        "--worker",
+        f"--loops={loops}",
+        "--verbose",
     ] + pyperf_args
     sys.argv = [sys.argv[0]] + pyperf_cli
 
@@ -72,8 +90,10 @@ def run_benchmark(
     runner.bench_async_func(
         f"{bench_name}/rows_{config.total_rows}/keys_{config.select_rows}",
         bench_read,
+        loop_factory=lambda: loop,
     )
 
     logger.info("[%s] cleaning up...", bench_name)
-    asyncio.run(backend.cleanup())
+    loop.run_until_complete(backend.cleanup())
+    loop.real_close()
     logger.info("[%s] done", bench_name)

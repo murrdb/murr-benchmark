@@ -1,4 +1,4 @@
-total_rows: 10000000
+total_rows: 1000000
 select_rows: 1000
 select_cols: 10
 write_batch_size: 100000
