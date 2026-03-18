@@ -1,0 +1,38 @@
+[project]
+name = "murr-bench"
+version = "0.1.0"
+description = "Python e2e benchmark harness for murr"
+requires-python = ">=3.14"
+dependencies = [
+    "pyperf>=2.8",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "numpy>=2.0",
+    "pandas>=2.0",
+    "pyarrow>=18.0",
+    "httpx>=0.28",
+    "murr>=0.1.6",
+    "redis[hiredis]>=5.0",
+    "psycopg[binary]>=3.2",
+    "rocksdict>=0.3",
+    "testcontainers>=4.0",
+]
+
+[project.scripts]
+murr-bench = "murr_bench.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=1.0",
+]
+
+[tool.uv]
+environments = ["sys_platform == 'linux'"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,7 +1,7 @@
 total_rows: 10000000
 select_rows: 1000
 select_cols: 10
-write_batch_size: 10000000
+write_batch_size: 100000
 measurement_time_secs: 10
 warmup_time_secs: 2
 sample_size: 10
