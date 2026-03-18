@@ -24,6 +24,7 @@ tempfile = "3"
 bollard = "0.20"
 futures-util = "0.3"
 libc = "0.2"
+rocksdb = "0.24"
 
 [[bench]]
 name = "murrdb_http_bench"
@@ -39,6 +40,10 @@ harness = false
 
 [[bench]]
 name = "murr_embed_bench"
+harness = false
+
+[[bench]]
+name = "rocksdb_bench"
 harness = false
 
 [profile.bench]
