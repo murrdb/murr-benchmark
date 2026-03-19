@@ -1,9 +1,9 @@
-total_rows: 1000000
+total_rows: 100000000
 select_rows: 1000
 select_cols: 10
-write_batch_size: 30000
-measurement_time_secs: 30
+write_batch_size: 1000000
+measurement_time_secs: 10
 warmup_time_secs: 5
 sample_size: 10
 backend:
-  image: "ghcr.io/murrdb/murr:0.1.6"
+  image: "ghcr.io/murrdb/murr:0.1.8"
