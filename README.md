@@ -163,11 +163,11 @@ cd python && uv run pytest tests/ -v
 
 | Engine | Layout | Ingestion | Read latency |
 |--------|--------|----------:|-------------:|
-| [murr](https://github.com/murrdb/murr) 0.1.8 | columnar (Arrow IPC) | 2.34M rows/s | 1.38 ms |
-| Redis 8.6.1 | blob (`SET`/`MGET`) | 136K rows/s | 2.42 ms |
-| Redis 8.6.1 | HSET (Feast) | 61K rows/s | 9.39 ms |
-| RocksDB | blob (KV) | 622K rows/s | 4.90 ms |
-| PostgreSQL 17 | blob (`BYTEA`) | 356K rows/s | 10.8 ms |
+| [murr](https://github.com/murrdb/murr) 0.1.8 | columnar | 2.34M rows/s | 1.38 ms |
+| Redis 8.6.1 | blob | 136K rows/s | 2.42 ms |
+| Redis 8.6.1 | HSET | 61K rows/s | 9.39 ms |
+| RocksDB | blob | 622K rows/s | 4.90 ms |
+| PostgreSQL 17 | blob | 356K rows/s | 10.8 ms |
 | PostgreSQL 17 | col-per-feature | 143K rows/s | 10.6 ms |
 
 ## License
