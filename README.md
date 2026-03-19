@@ -157,6 +157,19 @@ cd python && uv run pytest tests/ -v
 - Container backends (murr, Redis, PostgreSQL): memory delta is cgroup `usage`, which includes both anonymous (heap) and file-backed (mmap/page cache) pages.
 - Embedded backends (RocksDB): memory delta is RSS from `/proc/self/statm`. This captures heap allocations but not OS page cache for SST files, so the number underestimates true memory footprint compared to container backends.
 
+## Results: Python end-to-end benchmark
+
+100M rows, 10 Float32 columns, 1000 random key lookups per iteration. Measures full round-trip latency including protocol decoding and `pd.DataFrame` conversion. Ingestion throughput includes Python-side serialization and batch writes.
+
+| Engine | Layout | Ingestion | Read latency |
+|--------|--------|----------:|-------------:|
+| [murr](https://github.com/murrdb/murr) 0.1.8 | columnar (Arrow IPC) | 2.34M rows/s | 1.38 ms |
+| Redis 8.6.1 | blob (`SET`/`MGET`) | 136K rows/s | 2.42 ms |
+| Redis 8.6.1 | HSET (Feast) | 61K rows/s | 9.39 ms |
+| RocksDB | blob (KV) | 622K rows/s | 4.90 ms |
+| PostgreSQL 17 | blob (`BYTEA`) | 356K rows/s | 10.8 ms |
+| PostgreSQL 17 | col-per-feature | 143K rows/s | 10.6 ms |
+
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).

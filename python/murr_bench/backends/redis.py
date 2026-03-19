@@ -45,11 +45,16 @@ class RedisFeast(Backend):
             [batch.column(i + 1).to_numpy() for i in range(num_cols)]
         ).astype(np.float32)
 
+        raw = np.ascontiguousarray(values).tobytes()
+        stride = num_cols * 4
+
         pipe = self._redis.pipeline(transaction=False)
         for row_idx, key in enumerate(keys):
-            fields: dict[str, bytes] = {}
-            for col_idx, col_name in enumerate(col_names):
-                fields[col_name] = struct.pack("<f", float(values[row_idx, col_idx]))
+            row_start = row_idx * stride
+            fields = {
+                col_names[c]: raw[row_start + c * 4 : row_start + c * 4 + 4]
+                for c in range(num_cols)
+            }
             pipe.hset(key, mapping=fields)
         await pipe.execute()
 
@@ -112,9 +117,12 @@ class RedisFeatureBlob(Backend):
             [batch.column(i + 1).to_numpy() for i in range(num_cols)]
         ).astype(np.float32)
 
+        raw = np.ascontiguousarray(values).tobytes()
+        stride = num_cols * 4
+
         pipe = self._redis.pipeline(transaction=False)
         for row_idx, key in enumerate(keys):
-            pipe.set(key, values[row_idx].tobytes())
+            pipe.set(key, raw[row_idx * stride : (row_idx + 1) * stride])
         await pipe.execute()
 
     async def read(self, keys: list[str], columns: list[str]) -> pd.DataFrame:
