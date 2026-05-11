@@ -7,3 +7,34 @@ warmup_time_secs: 2
 sample_size: 10
 backend:
   data_dir: /tmp/murr-bench3
+
+  # Storage backend: exactly one of `mmap` (PlainTable) or `block` (BlockBasedTable).
+  # All values below are the murr 0.2.0-rc3 defaults, written out explicitly.
+
+  mmap:
+    bloom_bits_per_key: 16
+    hash_table_ratio: 0.75            # PlainTable hash utilization (lower = fewer collisions, more space)
+    index_sparseness: 4               # stride between sparse-index entries (lower = faster, more memory)
+    store_index_in_file: false        # store full index in file vs. rebuilding on open
+    huge_page_tlb_size: 0
+    write_buffer_size: 268435456      # 256 MiB
+    target_file_size_base: 1073741824 # 1 GiB
+    disable_auto_compactions: false
+
+  # block:
+  #   bloom_filter_bits_per_key: null  # null = bloom disabled
+  #   whole_key_filtering: true        # only meaningful when bloom is enabled
+  #   block_size: 512
+  #   block_cache_mb: 0                # 0 = block cache disabled
+  #   cache_index_and_filter_blocks: false
+  #   pin_l0_filter_and_index_blocks: false
+  #   block_restart_interval: 8
+  #   data_block_hash_index: true      # true = BinaryAndHash, false = BinarySearch
+  #   data_block_hash_ratio: 0.75
+  #   mmap_reads: true
+  #   use_direct_reads: false          # O_DIRECT for SST reads; mutually exclusive with mmap_reads
+  #   async_io: true                   # no-op when mmap_reads = true
+  #   verify_checksums: false
+  #   write_buffer_size: 268435456     # 256 MiB
+  #   target_file_size_base: 1073741824 # 1 GiB
+  #   disable_auto_compactions: false

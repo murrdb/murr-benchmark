@@ -5,7 +5,7 @@ use arrow::record_batch::RecordBatch;
 use indexmap::IndexMap;
 use serde::Deserialize;
 
-use murr::conf::{Config, StorageConfig};
+use murr::conf::{BackendConfig as StorageBackend, Config, StorageConfig};
 use murr::core::{ColumnSchema, DType, TableSchema};
 use murr::service::MurrService;
 
@@ -16,6 +16,8 @@ use crate::testdata;
 #[derive(Debug, Clone, Deserialize)]
 pub struct MurrEmbedConfig {
     pub data_dir: PathBuf,
+    #[serde(default, flatten)]
+    pub storage: StorageBackend,
 }
 
 impl BackendConfig for MurrEmbedConfig {}
@@ -63,7 +65,7 @@ impl Backend for MurrEmbed {
         let murr_config = Config {
             storage: StorageConfig {
                 path: data_dir.clone(),
-                ..StorageConfig::default()
+                backend: config.backend.storage.clone(),
             },
             ..Config::default()
         };
@@ -107,12 +109,12 @@ mod tests {
     use super::*;
     use crate::config::BenchConfig;
     use crate::testing::test_backend_roundtrip;
+    use murr::io::store::rocksdb::block::BlockConfig;
+    use murr::io::store::rocksdb::plain::PlainConfig;
     use tempfile::TempDir;
 
-    #[tokio::test]
-    async fn roundtrip() {
-        let dir = TempDir::new().unwrap();
-        let config = BenchConfig {
+    fn base_config(dir: &TempDir, storage: StorageBackend) -> BenchConfig<MurrEmbedConfig> {
+        BenchConfig {
             total_rows: 100,
             select_rows: 10,
             select_cols: 2,
@@ -122,8 +124,22 @@ mod tests {
             sample_size: 1,
             backend: MurrEmbedConfig {
                 data_dir: dir.path().to_path_buf(),
+                storage,
             },
-        };
+        }
+    }
+
+    #[tokio::test]
+    async fn roundtrip_mmap() {
+        let dir = TempDir::new().unwrap();
+        let config = base_config(&dir, StorageBackend::Mmap(PlainConfig::default()));
+        test_backend_roundtrip::<MurrEmbed>(config).await;
+    }
+
+    #[tokio::test]
+    async fn roundtrip_block() {
+        let dir = TempDir::new().unwrap();
+        let config = base_config(&dir, StorageBackend::Block(BlockConfig::default()));
         test_backend_roundtrip::<MurrEmbed>(config).await;
     }
 }

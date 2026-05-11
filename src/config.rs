@@ -23,6 +23,6 @@ pub struct BenchConfig<B: BackendConfig> {
 impl<B: BackendConfig> BenchConfig<B> {
     pub fn from_file(path: impl AsRef<Path>) -> Self {
         let contents = std::fs::read_to_string(path).expect("failed to read config file");
-        serde_yaml::from_str(&contents).expect("failed to parse config YAML")
+        serde_yaml_ng::from_str(&contents).expect("failed to parse config YAML")
     }
 }
