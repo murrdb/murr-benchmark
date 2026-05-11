@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use arrow::record_batch::RecordBatch;
+use indexmap::IndexMap;
 use serde::Deserialize;
 
 use murr::conf::{Config, StorageConfig};
@@ -28,7 +28,7 @@ pub struct MurrEmbed {
 
 impl MurrEmbed {
     fn build_table_schema(num_cols: usize) -> TableSchema {
-        let mut columns = HashMap::new();
+        let mut columns = IndexMap::new();
         columns.insert(
             "key".to_string(),
             ColumnSchema {
@@ -62,14 +62,15 @@ impl Backend for MurrEmbed {
 
         let murr_config = Config {
             storage: StorageConfig {
-                cache_dir: data_dir.clone(),
+                path: data_dir.clone(),
+                ..StorageConfig::default()
             },
             ..Config::default()
         };
 
-        let svc = MurrService::new(murr_config).await.unwrap();
+        let svc = MurrService::new(murr_config).unwrap();
         let table_schema = Self::build_table_schema(config.select_cols);
-        svc.create("bench", table_schema).await.unwrap();
+        svc.create("bench", table_schema).unwrap();
 
         MurrEmbed {
             svc: Arc::new(svc),
@@ -78,13 +79,13 @@ impl Backend for MurrEmbed {
     }
 
     async fn write_batch(&self, batch: &Batch) {
-        self.svc.write("bench", &batch.inner).await.unwrap();
+        self.svc.write("bench", &batch.inner).unwrap();
     }
 
     async fn read(&self, keys: &[String], columns: &[String]) -> Self::Response {
         let key_refs: Vec<&str> = keys.iter().map(|s| s.as_str()).collect();
         let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
-        self.svc.read("bench", &key_refs, &col_refs).await.unwrap()
+        self.svc.read("bench", &key_refs, &col_refs).unwrap()
     }
 
     async fn memory_usage(&self) -> crate::backend::MemoryUsage {

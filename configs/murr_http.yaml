@@ -6,4 +6,4 @@ measurement_time_secs: 10
 warmup_time_secs: 5
 sample_size: 10
 backend:
-  image: "ghcr.io/murrdb/murr:0.1.8"
+  image: "ghcr.io/murrdb/murr:0.2.0-rc3"
