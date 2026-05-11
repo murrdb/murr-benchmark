@@ -150,6 +150,10 @@ impl Backend for MurrHttp {
         crate::stats::disk::DiskUsage::for_container(self._container.id()).await
     }
 
+    async fn network_usage(&self) -> crate::backend::NetworkUsage {
+        crate::stats::net::NetworkUsage::for_container(self._container.id()).await
+    }
+
     async fn cleanup(self) {
         drop(self._container);
     }

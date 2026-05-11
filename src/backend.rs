@@ -5,6 +5,7 @@ use arrow::record_batch::RecordBatch;
 use crate::config::{BackendConfig, BenchConfig};
 pub use crate::stats::disk::DiskUsage;
 pub use crate::stats::mem::MemoryUsage;
+pub use crate::stats::net::NetworkUsage;
 
 /// A pre-processed batch of test data ready for backend ingestion.
 pub struct Batch {
@@ -48,6 +49,17 @@ pub trait Backend: Sized + Send + Sync + Clone {
 
     /// Report current disk usage.
     fn disk_usage(&self) -> impl Future<Output = DiskUsage> + Send;
+
+    /// Report cumulative network bytes in/out.
+    /// Default returns zero — only meaningful for Docker-based backends.
+    fn network_usage(&self) -> impl Future<Output = NetworkUsage> + Send {
+        async {
+            NetworkUsage {
+                rx_bytes: 0,
+                tx_bytes: 0,
+            }
+        }
+    }
 
     /// Flush all buffered writes to durable storage.
     /// Called after all write_batch calls, before disk_usage is measured.

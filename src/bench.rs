@@ -42,6 +42,8 @@ impl Bench {
         info!("[{group_name}] memory before load: {:?}", mem_before);
         let disk_before = rt.block_on(backend.disk_usage());
         info!("[{group_name}] disk before load:   {:?}", disk_before);
+        let net_before = rt.block_on(backend.network_usage());
+        info!("[{group_name}] net before load:    {:?}", net_before);
 
         let columns = testdata::column_names(config.select_cols);
         let schema = testdata::make_schema(config.select_cols);
@@ -89,6 +91,9 @@ impl Bench {
         let disk_after = rt.block_on(backend.disk_usage());
         info!("[{group_name}] disk after load:    {:?}", disk_after);
         info!("[{group_name}] disk delta:         {:?}", disk_before.diff(&disk_after));
+        let net_after = rt.block_on(backend.network_usage());
+        info!("[{group_name}] net after load:     {:?}", net_after);
+        info!("[{group_name}] net delta:          {:?}", net_before.diff(&net_after));
 
         let total_rows = config.total_rows;
         let select_rows = config.select_rows;
@@ -120,6 +125,9 @@ impl Bench {
         let mem_bench = rt.block_on(backend.memory_usage());
         info!("[{group_name}] memory after bench: {:?}", mem_bench);
         info!("[{group_name}] memory delta (bench): {:?}", mem_after.diff(&mem_bench));
+        let net_bench = rt.block_on(backend.network_usage());
+        info!("[{group_name}] net after bench:    {:?}", net_bench);
+        info!("[{group_name}] net delta (bench):  {:?}", net_after.diff(&net_bench));
 
         info!("[{group_name}] cleaning up...");
         rt.block_on(backend.cleanup());

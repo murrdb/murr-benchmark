@@ -92,6 +92,10 @@ impl Backend for PgFeatureBlob {
         self.pg.disk_usage().await
     }
 
+    async fn network_usage(&self) -> crate::backend::NetworkUsage {
+        crate::stats::net::NetworkUsage::for_container(self.pg._container.id()).await
+    }
+
     async fn cleanup(self) {
         drop(self.pg);
     }
