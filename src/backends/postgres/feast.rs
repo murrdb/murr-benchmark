@@ -81,7 +81,11 @@ impl Backend for PgFeast {
     }
 
     async fn flush(&self) {
-        self.pg.client.execute("CHECKPOINT", &[]).await.expect("checkpoint failed");
+        self.pg
+            .client
+            .execute("CHECKPOINT", &[])
+            .await
+            .expect("checkpoint failed");
     }
 
     async fn read(&self, keys: &[String], columns: &[String]) -> Self::Response {
@@ -128,7 +132,7 @@ mod tests {
             warmup_time_secs: 1,
             sample_size: 1,
             backend: PgFeastConfig {
-                image: "postgres:17".to_string(),
+                image: "postgres:18.3".to_string(),
             },
         };
         test_backend_roundtrip::<PgFeast>(config).await;

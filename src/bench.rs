@@ -1,4 +1,6 @@
 use std::hint::black_box;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use arrow::array::AsArray;
@@ -106,6 +108,8 @@ impl Bench {
         group.warm_up_time(Duration::from_secs(config.warmup_time_secs));
         group.throughput(Throughput::Elements(select_rows as u64));
 
+        let read_count = Arc::new(AtomicU64::new(0));
+
         group.bench_with_input(
             BenchmarkId::new("keys", select_rows),
             &select_rows,
@@ -113,9 +117,12 @@ impl Bench {
                 b.to_async(rt).iter(|| {
                     let backend = backend.clone();
                     let columns = columns.clone();
+                    let read_count = read_count.clone();
                     async move {
                         let keys = testdata::generate_random_keys(select_rows, total_rows);
-                        black_box(backend.read(&keys, &columns).await)
+                        let resp = black_box(backend.read(&keys, &columns).await);
+                        read_count.fetch_add(1, Ordering::Relaxed);
+                        resp
                     }
                 })
             },
@@ -126,8 +133,20 @@ impl Bench {
         info!("[{group_name}] memory after bench: {:?}", mem_bench);
         info!("[{group_name}] memory delta (bench): {:?}", mem_after.diff(&mem_bench));
         let net_bench = rt.block_on(backend.network_usage());
+        let net_delta_bench = net_after.diff(&net_bench);
         info!("[{group_name}] net after bench:    {:?}", net_bench);
-        info!("[{group_name}] net delta (bench):  {:?}", net_after.diff(&net_bench));
+        info!("[{group_name}] net delta (bench):  {:?}", net_delta_bench);
+
+        let reads = read_count.load(Ordering::Relaxed);
+        info!("[{group_name}] reads:              {reads} calls");
+        if reads > 0 {
+            let rx_per_call = net_delta_bench.rx_bytes as f64 / reads as f64;
+            let tx_per_call = net_delta_bench.tx_bytes as f64 / reads as f64;
+            info!(
+                "[{group_name}] net per read:       RX={:.1} bytes/call, TX={:.1} bytes/call",
+                rx_per_call, tx_per_call
+            );
+        }
 
         info!("[{group_name}] cleaning up...");
         rt.block_on(backend.cleanup());

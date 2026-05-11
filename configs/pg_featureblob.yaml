@@ -6,4 +6,4 @@ measurement_time_secs: 10
 warmup_time_secs: 2
 sample_size: 10
 backend:
-  image: "postgres:17"
+  image: "postgres:18.3"

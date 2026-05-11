@@ -6,5 +6,5 @@ measurement_time_secs: 10
 warmup_time_secs: 2
 sample_size: 10
 backend:
-  image: "redis:8.6.1"
+  image: "redis:8.6.3"
   read_mode: hgetall
