@@ -81,11 +81,12 @@ class PgFeast(Backend):
         cols = ["key"] + col_names
         async with self._conn.cursor() as cur:
             async with cur.copy(
-                f"COPY bench ({', '.join(cols)}) FROM STDIN"
+                f"COPY bench ({', '.join(cols)}) FROM STDIN WITH BINARY"
             ) as copy:
+                copy.set_types(["text"] + ["real"] * num_cols)
                 for row_idx in range(len(keys)):
                     row_vals = [keys[row_idx]] + [
-                        str(float(values[row_idx, col_idx]))
+                        float(values[row_idx, col_idx])
                         for col_idx in range(num_cols)
                     ]
                     await copy.write_row(row_vals)

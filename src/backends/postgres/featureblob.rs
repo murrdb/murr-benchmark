@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use serde::Deserialize;
-use tokio_postgres::types::Type;
+use tokio_postgres::binary_copy::BinaryCopyInWriter;
+use tokio_postgres::types::{ToSql, Type};
 
 use crate::backend::{Backend, Batch};
 use crate::config::{BackendConfig, BenchConfig};
@@ -68,36 +69,26 @@ impl Backend for PgFeatureBlob {
     async fn write_batch(&self, batch: &Batch) {
         let value_cols = batch.value_columns();
         let num_cols = value_cols.len();
-        let num_rows = batch.keys.len();
 
-        // Build concrete typed vectors to avoid dyn ToSql lifetime issues.
-        let mut keys_vec: Vec<String> = Vec::with_capacity(num_rows);
-        let mut blobs_vec: Vec<Vec<u8>> = Vec::with_capacity(num_rows);
+        let mut blob = Vec::with_capacity(num_cols * 4);
+        let sink = self
+            .pg
+            .client
+            .copy_in("COPY bench (key, value) FROM STDIN BINARY")
+            .await
+            .unwrap();
+        let writer = BinaryCopyInWriter::new(sink, &[Type::TEXT, Type::BYTEA]);
+        tokio::pin!(writer);
 
         for (row, key) in batch.keys.iter().enumerate() {
-            let mut blob = Vec::with_capacity(num_cols * 4);
+            blob.clear();
             for col in &value_cols {
                 blob.extend_from_slice(&col.value(row).to_le_bytes());
             }
-            keys_vec.push(key.clone());
-            blobs_vec.push(blob);
+            let row: [&(dyn ToSql + Sync); 2] = [key, &blob];
+            writer.as_mut().write(&row).await.unwrap();
         }
-
-        let mut placeholders = Vec::with_capacity(num_rows);
-        let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
-            Vec::with_capacity(num_rows * 2);
-
-        for i in 0..num_rows {
-            placeholders.push(format!("(${}, ${})", i * 2 + 1, i * 2 + 2));
-            params.push(&keys_vec[i]);
-            params.push(&blobs_vec[i]);
-        }
-
-        let sql = format!(
-            "INSERT INTO bench (key, value) VALUES {}",
-            placeholders.join(", ")
-        );
-        self.pg.client.execute(&sql, &params).await.unwrap();
+        writer.finish().await.unwrap();
     }
 
     async fn flush(&self) {
