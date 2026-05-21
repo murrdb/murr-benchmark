@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 import time
 
 import pyperf
@@ -24,9 +23,9 @@ class PersistentEventLoop(asyncio.SelectorEventLoop):
 
 
 def run_benchmark(
+    runner: pyperf.Runner,
     backend: Backend,
     bench_name: str,
-    pyperf_args: list[str],
 ) -> None:
     config = backend.config
 
@@ -72,10 +71,10 @@ def run_benchmark(
 
     # Calibrate `loops` from a few real calls. pyperf's `--worker` mode (which we
     # need because the backend is initialised in this process) requires an explicit
-    # `--loops=N` and does not auto-calibrate. Target ~100ms per value, matching
-    # pyperf's own default value-time target.
-    TARGET_VALUE_MS = 100.0
-    LOOPS_CAP = 10000  # bound keys_pool memory for very-fast backends
+    # `--loops=N` and does not auto-calibrate. Target per-value time is derived
+    # from the YAML so total measurement ≈ measurement_time_secs.
+    target_value_ms = config.measurement_time_secs * 1000.0 / config.sample_size
+    LOOPS_CAP = 100000  # bound keys_pool memory for very-fast backends
 
     async def _calibrate_loops() -> int:
         # Discard the first call as warmup (connection setup, page-cache fill, etc.).
@@ -88,46 +87,48 @@ def run_benchmark(
             keys = generate_random_keys(config.select_rows, config.total_rows)
             await backend.read(keys, columns)
         per_call_ms = (pyperf.perf_counter() - t0) * 1000.0 / n_cal
-        loops = max(1, int(TARGET_VALUE_MS / per_call_ms))
+        loops = max(1, int(target_value_ms / per_call_ms))
         loops = min(loops, LOOPS_CAP)
         logger.info(
-            "[%s] calibrated: %.3fms/call -> loops=%d", bench_name, per_call_ms, loops
+            "[%s] calibrated: %.3fms/call -> loops=%d (target %.0fms/value)",
+            bench_name, per_call_ms, loops, target_value_ms,
         )
         return loops
 
-    loops = loop.run_until_complete(_calibrate_loops())
+    calibrated_loops = loop.run_until_complete(_calibrate_loops())
 
     logger.info("[%s] starting benchmark...", bench_name)
 
     # Mirrors Criterion's `iter_batched` semantics: keys are pre-generated outside
-    # the timed region so RNG + str() cost is excluded from the measurement.
-    def bench_time_func(loops: int) -> float:
+    # the timed region so RNG + str() cost is excluded from the measurement. We
+    # treat `calibrated_loops` as inner_loops and ignore pyperf's outer loops arg
+    # (set to 1 globally in cli.py), so each variant runs its own iteration count
+    # while still sharing a single Runner.
+    def bench_time_func(pyperf_loops: int) -> float:
+        iters = pyperf_loops * calibrated_loops
         keys_pool = [
             generate_random_keys(config.select_rows, config.total_rows)
-            for _ in range(loops)
+            for _ in range(iters)
         ]
         t0 = pyperf.perf_counter()
         for keys in keys_pool:
             loop.run_until_complete(backend.read(keys, columns))
         return pyperf.perf_counter() - t0
 
-    # `measurement_time_secs` is a soft hint on the pyperf side: each value is
-    # ~TARGET_VALUE_MS, then pyperf runs `sample_size` values. Total runtime is
-    # roughly sample_size * 100ms regardless of measurement_time_secs. Use
-    # `sample_size` to control bench length; `warmup_time_secs` is interpreted as
-    # a count of warmup values (not seconds — pyperf has no time-based equivalent).
-    pyperf_cli = [
-        f"--values={config.sample_size}",
-        f"--warmups={config.warmup_time_secs}",
-        "--worker",
-        f"--loops={loops}",
-    ] + pyperf_args
-    sys.argv = [sys.argv[0]] + pyperf_cli
-
-    runner = pyperf.Runner()
+    total_iters = config.sample_size * calibrated_loops
+    logger.info(
+        "[%s] pyperf: values=%d warmups=%d inner_loops=%d -> %d measured iters/variant (~%.1fs)",
+        bench_name,
+        config.sample_size,
+        config.warmup_time_secs,
+        calibrated_loops,
+        total_iters,
+        config.sample_size * target_value_ms / 1000.0,
+    )
     runner.bench_time_func(
         f"{bench_name}/rows_{config.total_rows}/keys_{config.select_rows}",
         bench_time_func,
+        inner_loops=calibrated_loops,
     )
 
     logger.info("[%s] cleaning up...", bench_name)

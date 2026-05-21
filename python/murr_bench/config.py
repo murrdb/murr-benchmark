@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal, TypeVar
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class BenchConfig(BaseModel):
@@ -43,6 +43,10 @@ def load_variants(cls: type[T], path: str | Path) -> list[tuple[str, T]]:
 
 class MurrHttpConfig(BenchConfig):
     class Backend(BaseModel):
+        # Extra keys (mmap: {...} / block: {...}) are passed through to the
+        # murr server YAML; murr's `BackendConfig` is a serde-flattened enum
+        # tagged by the variant name.
+        model_config = ConfigDict(extra="allow")
         image: str
         cgroup_memory_mb: int | None = None
 
