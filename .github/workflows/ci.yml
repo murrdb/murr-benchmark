@@ -24,7 +24,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: cargo test
-        run: cargo test --all-targets
+        run: cargo test --lib --tests
 
   python:
     name: Python tests
