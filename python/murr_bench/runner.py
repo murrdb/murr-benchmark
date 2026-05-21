@@ -70,6 +70,33 @@ def run_benchmark(
     logger.info("[%s] flushing backend...", bench_name)
     loop.run_until_complete(backend.flush())
 
+    # Calibrate `loops` from a few real calls. pyperf's `--worker` mode (which we
+    # need because the backend is initialised in this process) requires an explicit
+    # `--loops=N` and does not auto-calibrate. Target ~100ms per value, matching
+    # pyperf's own default value-time target.
+    TARGET_VALUE_MS = 100.0
+    LOOPS_CAP = 10000  # bound keys_pool memory for very-fast backends
+
+    async def _calibrate_loops() -> int:
+        # Discard the first call as warmup (connection setup, page-cache fill, etc.).
+        await backend.read(
+            generate_random_keys(config.select_rows, config.total_rows), columns
+        )
+        n_cal = 5
+        t0 = pyperf.perf_counter()
+        for _ in range(n_cal):
+            keys = generate_random_keys(config.select_rows, config.total_rows)
+            await backend.read(keys, columns)
+        per_call_ms = (pyperf.perf_counter() - t0) * 1000.0 / n_cal
+        loops = max(1, int(TARGET_VALUE_MS / per_call_ms))
+        loops = min(loops, LOOPS_CAP)
+        logger.info(
+            "[%s] calibrated: %.3fms/call -> loops=%d", bench_name, per_call_ms, loops
+        )
+        return loops
+
+    loops = loop.run_until_complete(_calibrate_loops())
+
     logger.info("[%s] starting benchmark...", bench_name)
 
     # Mirrors Criterion's `iter_batched` semantics: keys are pre-generated outside
@@ -84,15 +111,16 @@ def run_benchmark(
             loop.run_until_complete(backend.read(keys, columns))
         return pyperf.perf_counter() - t0
 
-    # `measurement_time_secs` is a soft hint on the pyperf side: pyperf auto-calibrates
-    # the inner-loop count to ~100ms per value, then runs `sample_size` values. Total
-    # runtime is roughly `sample_size * 100ms` regardless of measurement_time_secs.
-    # Use `sample_size` to control the bench length; `warmup_time_secs` is interpreted
-    # as a count of warmup values (not seconds — pyperf has no time-based equivalent).
+    # `measurement_time_secs` is a soft hint on the pyperf side: each value is
+    # ~TARGET_VALUE_MS, then pyperf runs `sample_size` values. Total runtime is
+    # roughly sample_size * 100ms regardless of measurement_time_secs. Use
+    # `sample_size` to control bench length; `warmup_time_secs` is interpreted as
+    # a count of warmup values (not seconds — pyperf has no time-based equivalent).
     pyperf_cli = [
         f"--values={config.sample_size}",
         f"--warmups={config.warmup_time_secs}",
         "--worker",
+        f"--loops={loops}",
         "--verbose",
     ] + pyperf_args
     sys.argv = [sys.argv[0]] + pyperf_cli
