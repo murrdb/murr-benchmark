@@ -12,8 +12,9 @@ rand = "0.10"
 redis = { version = "1.2", features = ["tokio-comp", "connection-manager"] }
 testcontainers = "0.27"
 #murr = { git = "https://github.com/murrdb/murr", features = ["testutil"] }
-murr = "0.2.0-rc3"
+murr = "0.2.0"
 reqwest = { version = "0.13", features = ["json"] }
+bytes = "1"
 log = "0.4"
 env_logger = "0.11"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
@@ -26,8 +27,8 @@ tempfile = "3"
 bollard = "0.20"
 futures-util = "0.3"
 libc = "0.2"
-rocksdb = "0.24"
-mimalloc = { version = "0.1", features = ["v3"] }
+rocksdb = { version = "0.24", features = ["jemalloc"] }
+tikv-jemallocator = "0.6"
 tokio-postgres = "0.7"
 
 [[bench]]

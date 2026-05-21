@@ -32,7 +32,7 @@ pub async fn test_backend_roundtrip<B: Backend>(config: BenchConfig<B::Config>) 
 
     let mem = backend.memory_usage().await;
     assert!(mem.rss_bytes > 0, "expected non-zero RSS");
-    assert!(mem.virt_bytes > 0, "expected non-zero VIRT");
+    assert!(mem.total_bytes > 0, "expected non-zero TOTAL");
 
     // Read back known keys (first select_rows keys: "0", "1", ...)
     let keys: Vec<String> = (0..config.select_rows).map(|i| i.to_string()).collect();

@@ -3,7 +3,10 @@ use murr_benchmark::backends::rocksdb::RocksDb;
 use murr_benchmark::bench::Bench;
 
 fn bench_rocksdb(c: &mut criterion::Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
     Bench::run::<RocksDb>(c, "configs/rocksdb.yaml", "rocksdb", &rt);
 }
 

@@ -3,7 +3,10 @@ use murr_benchmark::backends::redis::feast::RedisFeast;
 use murr_benchmark::bench::Bench;
 
 fn bench_redis_feast(c: &mut criterion::Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
     Bench::run::<RedisFeast>(c, "configs/redis_feast.yaml", "redis_feast", &rt);
 }
 

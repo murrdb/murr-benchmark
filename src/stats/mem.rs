@@ -7,7 +7,7 @@ use futures_util::StreamExt;
 pub struct MemoryUsage {
     pub rss_bytes: u64,
     pub shared_bytes: u64,
-    pub virt_bytes: u64,
+    pub total_bytes: u64,
 }
 
 impl MemoryUsage {
@@ -46,12 +46,12 @@ impl MemoryUsage {
             .copied()
             .unwrap_or(0);
 
-        let virt_bytes = mem.usage.unwrap_or(0);
+        let total_bytes = mem.usage.unwrap_or(0);
 
         MemoryUsage {
             rss_bytes,
             shared_bytes,
-            virt_bytes,
+            total_bytes,
         }
     }
 
@@ -70,7 +70,7 @@ impl MemoryUsage {
         MemoryUsage {
             rss_bytes: parts[1] * page_size,
             shared_bytes: parts[2] * page_size,
-            virt_bytes: parts[0] * page_size,
+            total_bytes: parts[0] * page_size,
         }
     }
 
@@ -78,7 +78,7 @@ impl MemoryUsage {
         MemoryUsage {
             rss_bytes: other.rss_bytes.saturating_sub(self.rss_bytes),
             shared_bytes: other.shared_bytes.saturating_sub(self.shared_bytes),
-            virt_bytes: other.virt_bytes.saturating_sub(self.virt_bytes),
+            total_bytes: other.total_bytes.saturating_sub(self.total_bytes),
         }
     }
 }
@@ -87,10 +87,10 @@ impl fmt::Debug for MemoryUsage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "RSS={:.2} MiB, SHR={:.2} MiB, VIRT={:.2} MiB",
+            "RSS={:.2} MiB, SHR={:.2} MiB, TOTAL={:.2} MiB",
             self.rss_bytes as f64 / 1048576.0,
             self.shared_bytes as f64 / 1048576.0,
-            self.virt_bytes as f64 / 1048576.0,
+            self.total_bytes as f64 / 1048576.0,
         )
     }
 }

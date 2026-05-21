@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde::Deserialize;
 
 use crate::backend::{Backend, Batch};
@@ -32,7 +30,7 @@ pub struct RedisFeast {
 
 impl Backend for RedisFeast {
     type Config = RedisFeastConfig;
-    type Response = Vec<HashMap<String, Vec<u8>>>;
+    type Response = Vec<redis::Value>;
 
     async fn init(config: &BenchConfig<Self::Config>) -> Self {
         let redis = RedisContainer::start(
@@ -65,34 +63,21 @@ impl Backend for RedisFeast {
 
     async fn read(&self, keys: &[String], columns: &[String]) -> Self::Response {
         let mut con = self.redis.con.clone();
+        let mut pipe = redis::pipe();
         match self.read_mode {
             ReadMode::Hgetall => {
-                let mut pipe = redis::pipe();
                 for key in keys {
                     pipe.hgetall(key);
                 }
-                pipe.query_async(&mut con).await.unwrap()
             }
             ReadMode::Hmget => {
-                let mut pipe = redis::pipe();
                 let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
                 for key in keys {
                     pipe.cmd("HMGET").arg(key).arg(&col_refs);
                 }
-                let results: Vec<Vec<Option<Vec<u8>>>> =
-                    pipe.query_async(&mut con).await.unwrap();
-                results
-                    .into_iter()
-                    .map(|vals| {
-                        columns
-                            .iter()
-                            .zip(vals)
-                            .filter_map(|(col, val)| val.map(|v| (col.clone(), v)))
-                            .collect()
-                    })
-                    .collect()
             }
         }
+        pipe.query_async(&mut con).await.unwrap()
     }
 
     async fn memory_usage(&self) -> crate::backend::MemoryUsage {

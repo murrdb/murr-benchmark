@@ -3,7 +3,10 @@ use murr_benchmark::backends::postgres::featureblob::PgFeatureBlob;
 use murr_benchmark::bench::Bench;
 
 fn bench_pg_featureblob(c: &mut criterion::Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
     Bench::run::<PgFeatureBlob>(c, "configs/pg_featureblob.yaml", "pg_featureblob", &rt);
 }
 
