@@ -18,6 +18,8 @@ pub enum ReadMode {
 pub struct RedisFeastConfig {
     pub image: String,
     pub read_mode: ReadMode,
+    #[serde(default)]
+    pub cgroup_memory_mb: Option<i64>,
 }
 
 impl BackendConfig for RedisFeastConfig {}
@@ -33,7 +35,11 @@ impl Backend for RedisFeast {
     type Response = Vec<HashMap<String, Vec<u8>>>;
 
     async fn init(config: &BenchConfig<Self::Config>) -> Self {
-        let redis = RedisContainer::start(&config.backend.image).await;
+        let redis = RedisContainer::start(
+            &config.backend.image,
+            config.backend.cgroup_memory_mb,
+        )
+        .await;
         RedisFeast {
             redis,
             read_mode: config.backend.read_mode.clone(),
@@ -125,6 +131,7 @@ mod tests {
             backend: RedisFeastConfig {
                 image: "redis:latest".to_string(),
                 read_mode: ReadMode::Hgetall,
+                cgroup_memory_mb: None,
             },
         };
         test_backend_roundtrip::<RedisFeast>(config).await;
@@ -143,6 +150,7 @@ mod tests {
             backend: RedisFeastConfig {
                 image: "redis:latest".to_string(),
                 read_mode: ReadMode::Hmget,
+                cgroup_memory_mb: None,
             },
         };
         test_backend_roundtrip::<RedisFeast>(config).await;

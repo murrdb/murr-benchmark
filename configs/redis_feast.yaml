@@ -8,3 +8,4 @@ sample_size: 10
 backend:
   image: "redis:8.6.3"
   read_mode: hgetall
+  # cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited

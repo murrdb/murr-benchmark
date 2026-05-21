@@ -9,6 +9,8 @@ use super::PgContainer;
 #[derive(Debug, Clone, Deserialize)]
 pub struct PgFeastConfig {
     pub image: String,
+    #[serde(default)]
+    pub cgroup_memory_mb: Option<i64>,
 }
 
 impl BackendConfig for PgFeastConfig {}
@@ -23,7 +25,11 @@ impl Backend for PgFeast {
     type Response = Vec<tokio_postgres::Row>;
 
     async fn init(config: &BenchConfig<Self::Config>) -> Self {
-        let pg = PgContainer::start(&config.backend.image).await;
+        let pg = PgContainer::start(
+            &config.backend.image,
+            config.backend.cgroup_memory_mb,
+        )
+        .await;
 
         let col_defs: Vec<String> = (0..config.select_cols)
             .map(|i| format!("col_{i} REAL NOT NULL"))
@@ -133,6 +139,7 @@ mod tests {
             sample_size: 1,
             backend: PgFeastConfig {
                 image: "postgres:18.3".to_string(),
+                cgroup_memory_mb: None,
             },
         };
         test_backend_roundtrip::<PgFeast>(config).await;

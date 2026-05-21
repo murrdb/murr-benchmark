@@ -21,7 +21,7 @@ pub struct PgContainer {
 }
 
 impl PgContainer {
-    pub async fn start(image: &str) -> Self {
+    pub async fn start(image: &str, cgroup_memory_mb: Option<i64>) -> Self {
         let (name, tag) = match image.rsplit_once(':') {
             Some((n, t)) => (n, t),
             None => (image, "latest"),
@@ -34,6 +34,9 @@ impl PgContainer {
             ))
             .with_env_var("POSTGRES_PASSWORD", "bench")
             .with_env_var("POSTGRES_DB", "bench")
+            .with_host_config_modifier(move |hc| {
+                hc.memory = cgroup_memory_mb.map(|mb| mb * 1024 * 1024)
+            })
             .start()
             .await
             .expect("failed to start Postgres container");

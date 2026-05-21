@@ -29,6 +29,10 @@ class RedisFeast(Backend):
             DockerContainer(self.config.backend.image)
             .with_exposed_ports(REDIS_PORT)
         )
+        if self.config.backend.cgroup_memory_mb is not None:
+            self._container = self._container.with_kwargs(
+                mem_limit=f"{self.config.backend.cgroup_memory_mb}m"
+            )
         self._container.waiting_for(LogMessageWaitStrategy("Ready to accept connections"))
         self._container.start()
         host = self._container.get_container_host_ip()
@@ -102,6 +106,10 @@ class RedisFeatureBlob(Backend):
             DockerContainer(self.config.backend.image)
             .with_exposed_ports(REDIS_PORT)
         )
+        if self.config.backend.cgroup_memory_mb is not None:
+            self._container = self._container.with_kwargs(
+                mem_limit=f"{self.config.backend.cgroup_memory_mb}m"
+            )
         self._container.waiting_for(LogMessageWaitStrategy("Ready to accept connections"))
         self._container.start()
         host = self._container.get_container_host_ip()

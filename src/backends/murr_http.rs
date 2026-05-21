@@ -1,20 +1,34 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-use testcontainers::GenericImage;
 use testcontainers::core::ContainerAsync;
 use testcontainers::runners::AsyncRunner;
+use testcontainers::{GenericImage, ImageExt};
+
+use murr::conf::{BackendConfig as StorageBackend, StorageConfig};
 
 use crate::backend::{Backend, Batch};
 use crate::config::{BackendConfig, BenchConfig};
 use crate::testdata;
 
 const MURR_PORT: u16 = 8080;
+const CONTAINER_DATA_DIR: &str = "/tmp/murr-bench";
+const CONTAINER_CONFIG_PATH: &str = "/etc/murr/config.yaml";
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct MurrHttpConfig {
     pub image: String,
+    #[serde(default)]
+    pub cgroup_memory_mb: Option<i64>,
+    #[serde(default, flatten)]
+    pub storage: StorageBackend,
+}
+
+#[derive(Serialize)]
+struct MurrServerYaml {
+    storage: StorageConfig,
 }
 
 impl BackendConfig for MurrHttpConfig {}
@@ -57,9 +71,24 @@ impl Backend for MurrHttp {
     async fn init(config: &BenchConfig<Self::Config>) -> Self {
         let (image_name, image_tag) = Self::parse_image(&config.backend.image);
 
+        let server_yaml = serde_yaml_ng::to_string(&MurrServerYaml {
+            storage: StorageConfig {
+                path: PathBuf::from(CONTAINER_DATA_DIR),
+                backend: config.backend.storage.clone(),
+            },
+        })
+        .expect("failed to serialize murr server config");
+        let cgroup_memory_mb = config.backend.cgroup_memory_mb;
         let container = GenericImage::new(image_name, image_tag)
             .with_exposed_port(MURR_PORT.into())
-            .with_wait_for(testcontainers::core::WaitFor::message_on_stderr("Starting murr"))
+            .with_wait_for(testcontainers::core::WaitFor::message_on_stderr(
+                "Starting murr",
+            ))
+            .with_copy_to(CONTAINER_CONFIG_PATH, server_yaml.into_bytes())
+            .with_cmd(["--config", CONTAINER_CONFIG_PATH])
+            .with_host_config_modifier(move |hc| {
+                hc.memory = cgroup_memory_mb.map(|mb| mb * 1024 * 1024)
+            })
             .start()
             .await
             .expect("failed to start murrdb container");
@@ -102,11 +131,9 @@ impl Backend for MurrHttp {
     async fn write_batch(&self, batch: &Batch) {
         let mut buf = Vec::new();
         {
-            let mut writer = arrow::ipc::writer::StreamWriter::try_new(
-                &mut buf,
-                batch.inner.schema().as_ref(),
-            )
-            .expect("failed to create IPC writer");
+            let mut writer =
+                arrow::ipc::writer::StreamWriter::try_new(&mut buf, batch.inner.schema().as_ref())
+                    .expect("failed to create IPC writer");
             writer.write(&batch.inner).expect("failed to write batch");
             writer.finish().expect("failed to finish IPC stream");
         }
@@ -164,10 +191,11 @@ mod tests {
     use super::*;
     use crate::config::BenchConfig;
     use crate::testing::test_backend_roundtrip;
+    use murr::io::store::rocksdb::block::BlockConfig;
+    use murr::io::store::rocksdb::plain::PlainConfig;
 
-    #[tokio::test]
-    async fn roundtrip() {
-        let config = BenchConfig {
+    fn base_config(storage: StorageBackend) -> BenchConfig<MurrHttpConfig> {
+        BenchConfig {
             total_rows: 100,
             select_rows: 10,
             select_cols: 2,
@@ -177,8 +205,21 @@ mod tests {
             sample_size: 1,
             backend: MurrHttpConfig {
                 image: "ghcr.io/murrdb/murr:latest".to_string(),
+                cgroup_memory_mb: None,
+                storage,
             },
-        };
+        }
+    }
+
+    #[tokio::test]
+    async fn roundtrip_mmap() {
+        let config = base_config(StorageBackend::Mmap(PlainConfig::default()));
+        test_backend_roundtrip::<MurrHttp>(config).await;
+    }
+
+    #[tokio::test]
+    async fn roundtrip_block() {
+        let config = base_config(StorageBackend::Block(BlockConfig::default()));
         test_backend_roundtrip::<MurrHttp>(config).await;
     }
 }

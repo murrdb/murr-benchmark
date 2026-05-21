@@ -4,6 +4,7 @@ pub mod featureblob;
 use std::sync::Arc;
 
 use testcontainers::GenericImage;
+use testcontainers::ImageExt;
 use testcontainers::core::ContainerAsync;
 use testcontainers::runners::AsyncRunner;
 
@@ -17,7 +18,7 @@ pub struct RedisContainer {
 }
 
 impl RedisContainer {
-    pub async fn start(image: &str) -> Self {
+    pub async fn start(image: &str, cgroup_memory_mb: Option<i64>) -> Self {
         let (name, tag) = match image.rsplit_once(':') {
             Some((n, t)) => (n, t),
             None => (image, "latest"),
@@ -26,6 +27,9 @@ impl RedisContainer {
         let container = GenericImage::new(name, tag)
             .with_exposed_port(REDIS_PORT.into())
             .with_wait_for(testcontainers::core::WaitFor::message_on_stdout("Ready to accept connections"))
+            .with_host_config_modifier(move |hc| {
+                hc.memory = cgroup_memory_mb.map(|mb| mb * 1024 * 1024)
+            })
             .start()
             .await
             .expect("failed to start Redis container");
