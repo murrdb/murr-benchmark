@@ -72,28 +72,35 @@ def run_benchmark(
 
     logger.info("[%s] starting benchmark...", bench_name)
 
-    async def bench_read() -> None:
-        keys = generate_random_keys(config.select_rows, config.total_rows)
-        await backend.read(keys, columns)
+    # Mirrors Criterion's `iter_batched` semantics: keys are pre-generated outside
+    # the timed region so RNG + str() cost is excluded from the measurement.
+    def bench_time_func(loops: int) -> float:
+        keys_pool = [
+            generate_random_keys(config.select_rows, config.total_rows)
+            for _ in range(loops)
+        ]
+        t0 = pyperf.perf_counter()
+        for keys in keys_pool:
+            loop.run_until_complete(backend.read(keys, columns))
+        return pyperf.perf_counter() - t0
 
-    # Match Criterion's time-based approach: each sample ≈ measurement_time / sample_size
-    # With --loops=N, pyperf runs N iterations per sample and reports the average.
-    loops = max(1, config.measurement_time_secs * 100 // config.sample_size)
-
+    # `measurement_time_secs` is a soft hint on the pyperf side: pyperf auto-calibrates
+    # the inner-loop count to ~100ms per value, then runs `sample_size` values. Total
+    # runtime is roughly `sample_size * 100ms` regardless of measurement_time_secs.
+    # Use `sample_size` to control the bench length; `warmup_time_secs` is interpreted
+    # as a count of warmup values (not seconds — pyperf has no time-based equivalent).
     pyperf_cli = [
         f"--values={config.sample_size}",
         f"--warmups={config.warmup_time_secs}",
         "--worker",
-        f"--loops={loops}",
         "--verbose",
     ] + pyperf_args
     sys.argv = [sys.argv[0]] + pyperf_cli
 
     runner = pyperf.Runner()
-    runner.bench_async_func(
+    runner.bench_time_func(
         f"{bench_name}/rows_{config.total_rows}/keys_{config.select_rows}",
-        bench_read,
-        loop_factory=lambda: loop,
+        bench_time_func,
     )
 
     logger.info("[%s] cleaning up...", bench_name)

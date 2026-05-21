@@ -26,7 +26,20 @@ impl RedisContainer {
 
         let container = GenericImage::new(name, tag)
             .with_exposed_port(REDIS_PORT.into())
-            .with_wait_for(testcontainers::core::WaitFor::message_on_stdout("Ready to accept connections"))
+            .with_wait_for(testcontainers::core::WaitFor::message_on_stdout(
+                "Ready to accept connections",
+            ))
+            .with_cmd([
+                "redis-server",
+                "--save",
+                "",
+                "--appendonly",
+                "no",
+                "--io-threads",
+                "4",
+                "--io-threads-do-reads",
+                "yes",
+            ])
             .with_host_config_modifier(move |hc| {
                 hc.memory = cgroup_memory_mb.map(|mb| mb * 1024 * 1024)
             })
@@ -37,10 +50,7 @@ impl RedisContainer {
         let host = container.get_host().await.unwrap();
         let port = container.get_host_port_ipv4(REDIS_PORT).await.unwrap();
         let client = redis::Client::open(format!("redis://{host}:{port}")).unwrap();
-        let con = client
-            .get_multiplexed_async_connection()
-            .await
-            .unwrap();
+        let con = client.get_multiplexed_async_connection().await.unwrap();
         Self {
             con,
             _container: Arc::new(container),
