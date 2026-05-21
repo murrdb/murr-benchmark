@@ -2,6 +2,9 @@ from murr_bench.backends.redis import RedisFeast, RedisFeatureBlob
 from murr_bench.config import RedisFeastConfig, RedisFeatureBlobConfig
 from tests.conftest import *
 
+REDIS_COMMAND = ["redis-server", "--save", "", "--appendonly", "no"]
+REDIS_WAIT_LOG = "Ready to accept connections"
+
 
 async def test_feast_hgetall():
     backend = RedisFeast(RedisFeastConfig(
@@ -12,7 +15,12 @@ async def test_feast_hgetall():
         measurement_time_secs=MEASUREMENT_TIME_SECS,
         warmup_time_secs=WARMUP_TIME_SECS,
         sample_size=SAMPLE_SIZE,
-        backend=RedisFeastConfig.Backend(image="redis:latest", read_mode="hgetall"),
+        backend=RedisFeastConfig.Backend(
+            image="redis:latest",
+            read_mode="hgetall",
+            command=REDIS_COMMAND,
+            wait_log=REDIS_WAIT_LOG,
+        ),
     ))
     await roundtrip(backend)
 
@@ -26,7 +34,12 @@ async def test_feast_hmget():
         measurement_time_secs=MEASUREMENT_TIME_SECS,
         warmup_time_secs=WARMUP_TIME_SECS,
         sample_size=SAMPLE_SIZE,
-        backend=RedisFeastConfig.Backend(image="redis:latest", read_mode="hmget"),
+        backend=RedisFeastConfig.Backend(
+            image="redis:latest",
+            read_mode="hmget",
+            command=REDIS_COMMAND,
+            wait_log=REDIS_WAIT_LOG,
+        ),
     ))
     await roundtrip(backend)
 
@@ -40,6 +53,10 @@ async def test_featureblob():
         measurement_time_secs=MEASUREMENT_TIME_SECS,
         warmup_time_secs=WARMUP_TIME_SECS,
         sample_size=SAMPLE_SIZE,
-        backend=RedisFeatureBlobConfig.Backend(image="redis:latest"),
+        backend=RedisFeatureBlobConfig.Backend(
+            image="redis:latest",
+            command=REDIS_COMMAND,
+            wait_log=REDIS_WAIT_LOG,
+        ),
     ))
     await roundtrip(backend)
