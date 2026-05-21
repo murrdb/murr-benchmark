@@ -9,6 +9,8 @@ use super::PgContainer;
 #[derive(Debug, Clone, Deserialize)]
 pub struct PgFeatureBlobConfig {
     pub image: String,
+    #[serde(default)]
+    pub cgroup_memory_mb: Option<i64>,
 }
 
 impl BackendConfig for PgFeatureBlobConfig {}
@@ -23,7 +25,11 @@ impl Backend for PgFeatureBlob {
     type Response = Vec<tokio_postgres::Row>;
 
     async fn init(config: &BenchConfig<Self::Config>) -> Self {
-        let pg = PgContainer::start(&config.backend.image).await;
+        let pg = PgContainer::start(
+            &config.backend.image,
+            config.backend.cgroup_memory_mb,
+        )
+        .await;
         pg.client
             .execute(
                 "CREATE TABLE bench (key TEXT PRIMARY KEY, value BYTEA NOT NULL)",
@@ -123,6 +129,7 @@ mod tests {
             sample_size: 1,
             backend: PgFeatureBlobConfig {
                 image: "postgres:18.3".to_string(),
+                cgroup_memory_mb: None,
             },
         };
         test_backend_roundtrip::<PgFeatureBlob>(config).await;

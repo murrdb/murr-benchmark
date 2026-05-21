@@ -26,6 +26,7 @@ class BenchConfig(BaseModel):
 class MurrHttpConfig(BenchConfig):
     class Backend(BaseModel):
         image: str
+        cgroup_memory_mb: int | None = None
 
     backend: Backend
 
@@ -34,6 +35,7 @@ class RedisFeastConfig(BenchConfig):
     class Backend(BaseModel):
         image: str
         read_mode: Literal["hgetall", "hmget"]
+        cgroup_memory_mb: int | None = None
 
     backend: Backend
 
@@ -41,6 +43,7 @@ class RedisFeastConfig(BenchConfig):
 class RedisFeatureBlobConfig(BenchConfig):
     class Backend(BaseModel):
         image: str
+        cgroup_memory_mb: int | None = None
 
     backend: Backend
 
@@ -55,6 +58,7 @@ class RocksDbConfig(BenchConfig):
 class PgFeastConfig(BenchConfig):
     class Backend(BaseModel):
         image: str
+        cgroup_memory_mb: int | None = None
 
     backend: Backend
 
@@ -62,5 +66,6 @@ class PgFeastConfig(BenchConfig):
 class PgFeatureBlobConfig(BenchConfig):
     class Backend(BaseModel):
         image: str
+        cgroup_memory_mb: int | None = None
 
     backend: Backend

@@ -28,6 +28,10 @@ class MurrHttp(Backend):
             DockerContainer(self.config.backend.image)
             .with_exposed_ports(MURR_PORT)
         )
+        if self.config.backend.cgroup_memory_mb is not None:
+            self._container = self._container.with_kwargs(
+                mem_limit=f"{self.config.backend.cgroup_memory_mb}m"
+            )
         self._container.waiting_for(LogMessageWaitStrategy("Starting murr"))
         self._container.start()
 

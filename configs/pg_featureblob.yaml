@@ -7,3 +7,4 @@ warmup_time_secs: 2
 sample_size: 10
 backend:
   image: "postgres:18.3"
+  # cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited

@@ -18,13 +18,18 @@ logger = logging.getLogger(__name__)
 PG_PORT = 5432
 
 
-async def _start_pg(image: str) -> tuple[DockerContainer, psycopg.AsyncConnection]:
+async def _start_pg(
+    image: str,
+    cgroup_memory_mb: int | None,
+) -> tuple[DockerContainer, psycopg.AsyncConnection]:
     container = (
         DockerContainer(image)
         .with_exposed_ports(PG_PORT)
         .with_env("POSTGRES_PASSWORD", "bench")
         .with_env("POSTGRES_DB", "bench")
     )
+    if cgroup_memory_mb is not None:
+        container = container.with_kwargs(mem_limit=f"{cgroup_memory_mb}m")
     container.waiting_for(LogMessageWaitStrategy("database system is ready to accept connections"))
     container.start()
 
@@ -52,7 +57,10 @@ class PgFeast(Backend):
         self._conn: psycopg.AsyncConnection | None = None
 
     async def init(self) -> None:
-        self._container, self._conn = await _start_pg(self.config.backend.image)
+        self._container, self._conn = await _start_pg(
+            self.config.backend.image,
+            self.config.backend.cgroup_memory_mb,
+        )
 
         col_defs = ", ".join(
             f"col_{i} REAL NOT NULL" for i in range(self.config.select_cols)
@@ -109,7 +117,10 @@ class PgFeatureBlob(Backend):
         self._conn: psycopg.AsyncConnection | None = None
 
     async def init(self) -> None:
-        self._container, self._conn = await _start_pg(self.config.backend.image)
+        self._container, self._conn = await _start_pg(
+            self.config.backend.image,
+            self.config.backend.cgroup_memory_mb,
+        )
 
         await self._conn.execute(
             "CREATE TABLE bench (key TEXT PRIMARY KEY, value BYTEA NOT NULL)"
