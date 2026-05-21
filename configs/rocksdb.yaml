@@ -6,52 +6,57 @@ measurement_time_secs: 30
 warmup_time_secs: 5
 sample_size: 50
 backend:
-  data_dir: "/tmp/murr-bench-rocksdb"
-  # table_format: block_based            # "block_based" or "plain"
+  # Two table formats run head-to-head; each variant uses its own data_dir
+  # so the previous variant's SSTs don't bleed into the next run.
+  memory:
+    data_dir: "/tmp/murr-bench-rocksdb-plain"
+    table_format: plain
 
-  # # PlainTable settings (only used when table_format = plain; forces mmap_reads=true)
-  # plain_bloom_bits_per_key: 10         # 0 disables bloom in PlainTable
-  # plain_hash_table_ratio: 0.75
-  # plain_index_sparseness: 16
-  # plain_store_index_in_file: false
+    # PlainTable settings (forces mmap_reads=true).
+    plain_bloom_bits_per_key: 0          # 0 disables bloom in PlainTable
+    plain_hash_table_ratio: 0.75
+    plain_index_sparseness: 8
+    plain_store_index_in_file: false
 
-  # bloom_filter_bits_per_key: null      # null = bloom disabled
-  # whole_key_filtering: true            # only meaningful when bloom is enabled
-  # block_size: 512
-  # block_cache_mb: 0                    # 0 = block cache disabled
-  # cache_index_and_filter_blocks: false
-  # pin_l0_filter_and_index_blocks: false
-  # block_restart_interval: 8
-  # data_block_hash_index: true          # true = BinaryAndHash, false = BinarySearch
-  # data_block_hash_ratio: 0.75
-  # mmap_reads: true
-  # use_direct_reads: false              # O_DIRECT for SST reads; mutually exclusive with mmap_reads
-  # async_io: true                       # no-op when mmap_reads = true
-  # verify_checksums: false
-  # batched_multi_get: true              # true = batched_multi_get_cf_opt, false = multi_get_cf_opt
-  # sorted_input: true                   # only used with batched_multi_get
+    bloom_filter_bits_per_key: null      # null = bloom disabled
+    whole_key_filtering: true            # only meaningful when bloom is enabled
+    block_size: 512
+    block_cache_mb: 0                    # 0 = block cache disabled
+    cache_index_and_filter_blocks: false
+    pin_l0_filter_and_index_blocks: false
+    block_restart_interval: 8
+    data_block_hash_index: true          # true = BinaryAndHash, false = BinarySearch
+    data_block_hash_ratio: 0.75
+    mmap_reads: true
+    use_direct_reads: false              # O_DIRECT for SST reads; mutually exclusive with mmap_reads
+    async_io: true                       # no-op when mmap_reads = true
+    verify_checksums: false
+    batched_multi_get: false             # true = batched_multi_get_cf_opt, false = multi_get_cf_opt
+    sorted_input: false                  # only used with batched_multi_get
 
-  table_format: plain            # "block_based" or "plain"
+  disk:
+    data_dir: "/tmp/murr-bench-rocksdb-block"
+    table_format: block_based
 
-  # PlainTable settings (only used when table_format = plain; forces mmap_reads=true)
-  plain_bloom_bits_per_key: 0         # 0 disables bloom in PlainTable
-  plain_hash_table_ratio: 0.75
-  plain_index_sparseness: 8
-  plain_store_index_in_file: false
+    # PlainTable settings are inert when table_format = block_based, but the
+    # struct fields still need values.
+    plain_bloom_bits_per_key: 10
+    plain_hash_table_ratio: 0.75
+    plain_index_sparseness: 16
+    plain_store_index_in_file: false
 
-  bloom_filter_bits_per_key: null      # null = bloom disabled
-  whole_key_filtering: true            # only meaningful when bloom is enabled
-  block_size: 512
-  block_cache_mb: 0                    # 0 = block cache disabled
-  cache_index_and_filter_blocks: false
-  pin_l0_filter_and_index_blocks: false
-  block_restart_interval: 8
-  data_block_hash_index: true          # true = BinaryAndHash, false = BinarySearch
-  data_block_hash_ratio: 0.75
-  mmap_reads: true
-  use_direct_reads: false              # O_DIRECT for SST reads; mutually exclusive with mmap_reads
-  async_io: true                       # no-op when mmap_reads = true
-  verify_checksums: false
-  batched_multi_get: false              # true = batched_multi_get_cf_opt, false = multi_get_cf_opt
-  sorted_input: false                   # only used with batched_multi_get
-
+    bloom_filter_bits_per_key: 10        # null = bloom disabled
+    whole_key_filtering: true            # only meaningful when bloom is enabled
+    block_size: 4096
+    block_cache_mb: 256                  # 0 = block cache disabled
+    cache_index_and_filter_blocks: true
+    pin_l0_filter_and_index_blocks: true
+    block_restart_interval: 16
+    data_block_hash_index: true          # true = BinaryAndHash, false = BinarySearch
+    data_block_hash_ratio: 0.75
+    mmap_reads: false
+    use_direct_reads: false              # O_DIRECT for SST reads; mutually exclusive with mmap_reads
+    async_io: true                       # no-op when mmap_reads = true
+    verify_checksums: false
+    batched_multi_get: true              # true = batched_multi_get_cf_opt, false = multi_get_cf_opt
+    sorted_input: true                   # only used with batched_multi_get

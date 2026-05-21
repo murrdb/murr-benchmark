@@ -58,6 +58,10 @@ impl PgContainer {
                 format!("work_mem={work_mem}"),
                 "-c".to_string(),
                 format!("effective_cache_size={effective_cache_size}"),
+                "-c".to_string(),
+                "effective_io_concurrency=200".to_string(),
+                "-c".to_string(),
+                "max_wal_size=4GB".to_string(),
             ])
             .with_host_config_modifier(move |hc| {
                 hc.memory = cgroup_memory_mb.map(|mb| mb * 1024 * 1024)

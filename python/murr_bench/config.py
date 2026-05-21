@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, Self
+from typing import Literal, TypeVar
 
 import yaml
 from pydantic import BaseModel
@@ -16,11 +16,29 @@ class BenchConfig(BaseModel):
     warmup_time_secs: int
     sample_size: int
 
-    @classmethod
-    def from_file(cls, path: str | Path) -> Self:
-        with open(path) as f:
-            data = yaml.safe_load(f)
-        return cls.model_validate(data)
+
+T = TypeVar("T", bound=BenchConfig)
+
+
+def load_variants(cls: type[T], path: str | Path) -> list[tuple[str, T]]:
+    """Load a multi-variant YAML and return one validated config per backend variant.
+
+    The YAML's `backend:` key must be a map of named variants. Each variant becomes
+    a separate config object with `backend` set to that variant's settings, so the
+    rest of the harness can keep treating `config.backend` as a scalar.
+    """
+    with open(path) as f:
+        raw = yaml.safe_load(f)
+    backends = raw.pop("backend", None)
+    if not isinstance(backends, dict):
+        raise ValueError(
+            f"{path}: `backend` must be a map of named variants, "
+            f"e.g. `backend: {{ default: {{...}} }}`"
+        )
+    return [
+        (name, cls.model_validate({**raw, "backend": b}))
+        for name, b in backends.items()
+    ]
 
 
 class MurrHttpConfig(BenchConfig):

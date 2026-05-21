@@ -6,6 +6,7 @@ measurement_time_secs: 30
 warmup_time_secs: 2
 sample_size: 50
 backend:
-  image: "redis:8.6.3"
-  read_mode: hgetall
-  # cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited
+  memory:
+    image: "redis:8.6.3"
+    read_mode: hgetall
+    # cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited
