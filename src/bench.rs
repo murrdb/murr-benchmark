@@ -79,13 +79,17 @@ impl Bench {
             }
         }
 
-        rt.block_on(backend.flush());
         let ingest_elapsed = ingest_start.elapsed();
         info!(
             "[{group_name}] ingest total: {:.2?} ({:.0} rows/s)",
             ingest_elapsed,
             config.total_rows as f64 / ingest_elapsed.as_secs_f64()
         );
+
+        info!("[{group_name}] flushing...");
+        let flush_start = Instant::now();
+        rt.block_on(backend.flush());
+        info!("[{group_name}] flush total: {:.2?}", flush_start.elapsed());
 
         let mem_after = rt.block_on(backend.memory_usage());
         info!("[{group_name}] memory after load:  {:?}", mem_after);

@@ -13,6 +13,16 @@ use crate::stats::disk::DiskUsage;
 
 const PG_PORT: u16 = 5432;
 
+pub fn default_shared_buffers() -> String {
+    "128MB".to_string()
+}
+pub fn default_work_mem() -> String {
+    "4MB".to_string()
+}
+pub fn default_effective_cache_size() -> String {
+    "4GB".to_string()
+}
+
 /// Shared Postgres container + client wrapper.
 #[derive(Clone)]
 pub struct PgContainer {
@@ -21,7 +31,13 @@ pub struct PgContainer {
 }
 
 impl PgContainer {
-    pub async fn start(image: &str, cgroup_memory_mb: Option<i64>) -> Self {
+    pub async fn start(
+        image: &str,
+        cgroup_memory_mb: Option<i64>,
+        shared_buffers: &str,
+        work_mem: &str,
+        effective_cache_size: &str,
+    ) -> Self {
         let (name, tag) = match image.rsplit_once(':') {
             Some((n, t)) => (n, t),
             None => (image, "latest"),
@@ -34,6 +50,15 @@ impl PgContainer {
             ))
             .with_env_var("POSTGRES_PASSWORD", "bench")
             .with_env_var("POSTGRES_DB", "bench")
+            .with_cmd([
+                "postgres".to_string(),
+                "-c".to_string(),
+                format!("shared_buffers={shared_buffers}"),
+                "-c".to_string(),
+                format!("work_mem={work_mem}"),
+                "-c".to_string(),
+                format!("effective_cache_size={effective_cache_size}"),
+            ])
             .with_host_config_modifier(move |hc| {
                 hc.memory = cgroup_memory_mb.map(|mb| mb * 1024 * 1024)
             })

@@ -1,16 +1,26 @@
+use std::sync::Arc;
+
 use serde::Deserialize;
 use tokio_postgres::types::Type;
 
 use crate::backend::{Backend, Batch};
 use crate::config::{BackendConfig, BenchConfig};
 
-use super::PgContainer;
+use super::{
+    PgContainer, default_effective_cache_size, default_shared_buffers, default_work_mem,
+};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PgFeastConfig {
     pub image: String,
     #[serde(default)]
     pub cgroup_memory_mb: Option<i64>,
+    #[serde(default = "default_shared_buffers")]
+    pub shared_buffers: String,
+    #[serde(default = "default_work_mem")]
+    pub work_mem: String,
+    #[serde(default = "default_effective_cache_size")]
+    pub effective_cache_size: String,
 }
 
 impl BackendConfig for PgFeastConfig {}
@@ -18,6 +28,7 @@ impl BackendConfig for PgFeastConfig {}
 #[derive(Clone)]
 pub struct PgFeast {
     pg: PgContainer,
+    read_stmt: Arc<tokio_postgres::Statement>,
 }
 
 impl Backend for PgFeast {
@@ -28,6 +39,9 @@ impl Backend for PgFeast {
         let pg = PgContainer::start(
             &config.backend.image,
             config.backend.cgroup_memory_mb,
+            &config.backend.shared_buffers,
+            &config.backend.work_mem,
+            &config.backend.effective_cache_size,
         )
         .await;
 
@@ -43,7 +57,21 @@ impl Backend for PgFeast {
             .await
             .expect("failed to create table");
 
-        PgFeast { pg }
+        let col_list: String = (0..config.select_cols)
+            .map(|i| format!("col_{i}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let read_sql = format!("SELECT {col_list} FROM bench WHERE key = ANY($1)");
+        let read_stmt = pg
+            .client
+            .prepare_typed(&read_sql, &[Type::TEXT_ARRAY])
+            .await
+            .expect("failed to prepare read statement");
+
+        PgFeast {
+            pg,
+            read_stmt: Arc::new(read_stmt),
+        }
     }
 
     async fn write_batch(&self, batch: &Batch) {
@@ -89,17 +117,20 @@ impl Backend for PgFeast {
     async fn flush(&self) {
         self.pg
             .client
+            .execute("ANALYZE bench", &[])
+            .await
+            .expect("analyze failed");
+        self.pg
+            .client
             .execute("CHECKPOINT", &[])
             .await
             .expect("checkpoint failed");
     }
 
-    async fn read(&self, keys: &[String], columns: &[String]) -> Self::Response {
-        let col_list = columns.join(", ");
-        let sql = format!("SELECT {col_list} FROM bench WHERE key = ANY($1)");
+    async fn read(&self, keys: &[String], _columns: &[String]) -> Self::Response {
         self.pg
             .client
-            .query_typed(&sql, &[(&keys, Type::TEXT_ARRAY)])
+            .query(&*self.read_stmt, &[&keys])
             .await
             .unwrap()
     }
@@ -140,6 +171,9 @@ mod tests {
             backend: PgFeastConfig {
                 image: "postgres:18.3".to_string(),
                 cgroup_memory_mb: None,
+                shared_buffers: default_shared_buffers(),
+                work_mem: default_work_mem(),
+                effective_cache_size: default_effective_cache_size(),
             },
         };
         test_backend_roundtrip::<PgFeast>(config).await;
