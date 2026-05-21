@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use arrow::array::AsArray;
-use criterion::{BenchmarkId, Criterion, Throughput};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use log::info;
 use tokio::runtime::Runtime;
 
@@ -114,17 +114,20 @@ impl Bench {
             BenchmarkId::new("keys", select_rows),
             &select_rows,
             |b, _| {
-                b.to_async(rt).iter(|| {
-                    let backend = backend.clone();
-                    let columns = columns.clone();
-                    let read_count = read_count.clone();
-                    async move {
-                        let keys = testdata::generate_random_keys(select_rows, total_rows);
-                        let resp = black_box(backend.read(&keys, &columns).await);
-                        read_count.fetch_add(1, Ordering::Relaxed);
-                        resp
-                    }
-                })
+                b.to_async(rt).iter_batched(
+                    || testdata::generate_random_keys(select_rows, total_rows),
+                    |keys| {
+                        let backend = backend.clone();
+                        let columns = columns.clone();
+                        let read_count = read_count.clone();
+                        async move {
+                            let resp = black_box(backend.read(&keys, &columns).await);
+                            read_count.fetch_add(1, Ordering::Relaxed);
+                            resp
+                        }
+                    },
+                    BatchSize::SmallInput,
+                )
             },
         );
         group.finish();

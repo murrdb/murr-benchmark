@@ -3,7 +3,10 @@ use murr_benchmark::backends::postgres::feast::PgFeast;
 use murr_benchmark::bench::Bench;
 
 fn bench_pg_feast(c: &mut criterion::Criterion) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
     Bench::run::<PgFeast>(c, "configs/pg_feast.yaml", "pg_feast", &rt);
 }
 

@@ -66,7 +66,7 @@ impl MurrHttp {
 
 impl Backend for MurrHttp {
     type Config = MurrHttpConfig;
-    type Response = Vec<u8>;
+    type Response = bytes::Bytes;
 
     async fn init(config: &BenchConfig<Self::Config>) -> Self {
         let (image_name, image_tag) = Self::parse_image(&config.backend.image);
@@ -166,7 +166,7 @@ impl Backend for MurrHttp {
             .send()
             .await
             .unwrap();
-        resp.bytes().await.unwrap().to_vec()
+        resp.bytes().await.unwrap()
     }
 
     async fn memory_usage(&self) -> crate::stats::mem::MemoryUsage {
