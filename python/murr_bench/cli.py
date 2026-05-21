@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from murr_bench.backends import DEFAULT_CONFIGS, get_backend
+from murr_bench.backends import DEFAULT_CONFIGS, get_backends
 from murr_bench.runner import run_benchmark
 
 
@@ -23,8 +23,9 @@ def main() -> None:
 
     args, remaining = parser.parse_known_args()
 
-    backend = get_backend(args.backend, args.config)
-    run_benchmark(backend, args.backend, remaining)
+    variants = get_backends(args.backend, args.config)
+    for variant_name, backend in variants:
+        run_benchmark(backend, f"{args.backend}/{variant_name}", remaining)
 
 
 if __name__ == "__main__":
