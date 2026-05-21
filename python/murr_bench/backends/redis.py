@@ -25,15 +25,16 @@ class RedisFeast(Backend):
         self._redis: aioredis.Redis | None = None
 
     async def init(self) -> None:
-        self._container = (
-            DockerContainer(self.config.backend.image)
-            .with_exposed_ports(REDIS_PORT)
+        self._container = DockerContainer(self.config.backend.image).with_exposed_ports(
+            REDIS_PORT
         )
         if self.config.backend.cgroup_memory_mb is not None:
             self._container = self._container.with_kwargs(
                 mem_limit=f"{self.config.backend.cgroup_memory_mb}m"
             )
-        self._container.waiting_for(LogMessageWaitStrategy("Ready to accept connections"))
+        self._container.waiting_for(
+            LogMessageWaitStrategy("Ready to accept connections")
+        )
         self._container.start()
         host = self._container.get_container_host_ip()
         port = self._container.get_exposed_port(REDIS_PORT)
@@ -73,8 +74,7 @@ class RedisFeast(Backend):
             rows = []
             for hash_data in results:
                 row = [
-                    struct.unpack("<f", hash_data[col.encode()])[0]
-                    for col in columns
+                    struct.unpack("<f", hash_data[col.encode()])[0] for col in columns
                 ]
                 rows.append(row)
         else:
@@ -105,12 +105,27 @@ class RedisFeatureBlob(Backend):
         self._container = (
             DockerContainer(self.config.backend.image)
             .with_exposed_ports(REDIS_PORT)
+            .with_command(
+                [
+                    "redis-server",
+                    "--save",
+                    "",
+                    "--appendonly",
+                    "no",
+                    "--io-threads",
+                    "4",
+                    "--io-threads-do-reads",
+                    "yes",
+                ]
+            )
         )
         if self.config.backend.cgroup_memory_mb is not None:
             self._container = self._container.with_kwargs(
                 mem_limit=f"{self.config.backend.cgroup_memory_mb}m"
             )
-        self._container.waiting_for(LogMessageWaitStrategy("Ready to accept connections"))
+        self._container.waiting_for(
+            LogMessageWaitStrategy("Ready to accept connections")
+        )
         self._container.start()
         host = self._container.get_container_host_ip()
         port = self._container.get_exposed_port(REDIS_PORT)
@@ -136,9 +151,7 @@ class RedisFeatureBlob(Backend):
     async def read(self, keys: list[str], columns: list[str]) -> pd.DataFrame:
         assert self._redis is not None
         blobs: list[bytes | None] = await self._redis.mget(keys)
-        rows = np.stack(
-            [np.frombuffer(b, dtype="<f4") for b in blobs if b is not None]
-        )
+        rows = np.stack([np.frombuffer(b, dtype="<f4") for b in blobs if b is not None])
         return pd.DataFrame(rows, columns=columns)
 
     async def cleanup(self) -> None:
