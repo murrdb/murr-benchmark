@@ -71,3 +71,6 @@ debug = true
 
 [profile.bench.package."*"]
 debug = true
+
+[profile.dev.package.librocksdb-sys]
+debug = "line-tables-only"
