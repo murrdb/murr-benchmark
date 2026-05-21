@@ -16,6 +16,8 @@ pub enum ReadMode {
 pub struct RedisFeastConfig {
     pub image: String,
     pub read_mode: ReadMode,
+    pub command: Vec<String>,
+    pub wait_log: String,
     #[serde(default)]
     pub cgroup_memory_mb: Option<i64>,
 }
@@ -36,6 +38,8 @@ impl Backend for RedisFeast {
         let redis = RedisContainer::start(
             &config.backend.image,
             config.backend.cgroup_memory_mb,
+            config.backend.command.clone(),
+            &config.backend.wait_log,
         )
         .await;
         RedisFeast {
@@ -103,6 +107,13 @@ mod tests {
     use crate::config::BenchConfig;
     use crate::testing::test_backend_roundtrip;
 
+    fn redis_command() -> Vec<String> {
+        ["redis-server", "--save", "", "--appendonly", "no"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
+
     #[tokio::test]
     async fn roundtrip_hgetall() {
         let config = BenchConfig {
@@ -116,6 +127,8 @@ mod tests {
             backend: RedisFeastConfig {
                 image: "redis:latest".to_string(),
                 read_mode: ReadMode::Hgetall,
+                command: redis_command(),
+                wait_log: "Ready to accept connections".to_string(),
                 cgroup_memory_mb: None,
             },
         };
@@ -135,6 +148,8 @@ mod tests {
             backend: RedisFeastConfig {
                 image: "redis:latest".to_string(),
                 read_mode: ReadMode::Hmget,
+                command: redis_command(),
+                wait_log: "Ready to accept connections".to_string(),
                 cgroup_memory_mb: None,
             },
         };

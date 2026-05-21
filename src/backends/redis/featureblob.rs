@@ -9,6 +9,8 @@ use super::RedisContainer;
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedisFeatureBlobConfig {
     pub image: String,
+    pub command: Vec<String>,
+    pub wait_log: String,
     #[serde(default)]
     pub cgroup_memory_mb: Option<i64>,
 }
@@ -28,6 +30,8 @@ impl Backend for RedisFeatureBlob {
         let redis = RedisContainer::start(
             &config.backend.image,
             config.backend.cgroup_memory_mb,
+            config.backend.command.clone(),
+            &config.backend.wait_log,
         )
         .await;
         RedisFeatureBlob { redis }
@@ -88,6 +92,11 @@ mod tests {
             sample_size: 1,
             backend: RedisFeatureBlobConfig {
                 image: "redis:latest".to_string(),
+                command: ["redis-server", "--save", "", "--appendonly", "no"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+                wait_log: "Ready to accept connections".to_string(),
                 cgroup_memory_mb: None,
             },
         };

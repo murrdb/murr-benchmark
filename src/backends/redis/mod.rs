@@ -18,7 +18,12 @@ pub struct RedisContainer {
 }
 
 impl RedisContainer {
-    pub async fn start(image: &str, cgroup_memory_mb: Option<i64>) -> Self {
+    pub async fn start(
+        image: &str,
+        cgroup_memory_mb: Option<i64>,
+        command: Vec<String>,
+        wait_log: &str,
+    ) -> Self {
         let (name, tag) = match image.rsplit_once(':') {
             Some((n, t)) => (n, t),
             None => (image, "latest"),
@@ -26,20 +31,8 @@ impl RedisContainer {
 
         let container = GenericImage::new(name, tag)
             .with_exposed_port(REDIS_PORT.into())
-            .with_wait_for(testcontainers::core::WaitFor::message_on_stdout(
-                "Ready to accept connections",
-            ))
-            .with_cmd([
-                "redis-server",
-                "--save",
-                "",
-                "--appendonly",
-                "no",
-                "--io-threads",
-                "4",
-                "--io-threads-do-reads",
-                "yes",
-            ])
+            .with_wait_for(testcontainers::core::WaitFor::message_on_stdout(wait_log))
+            .with_cmd(command)
             .with_host_config_modifier(move |hc| {
                 hc.memory = cgroup_memory_mb.map(|mb| mb * 1024 * 1024)
             })

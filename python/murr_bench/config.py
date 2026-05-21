@@ -57,6 +57,8 @@ class RedisFeastConfig(BenchConfig):
     class Backend(BaseModel):
         image: str
         read_mode: Literal["hgetall", "hmget"]
+        command: list[str]
+        wait_log: str
         cgroup_memory_mb: int | None = None
 
     backend: Backend
@@ -65,6 +67,8 @@ class RedisFeastConfig(BenchConfig):
 class RedisFeatureBlobConfig(BenchConfig):
     class Backend(BaseModel):
         image: str
+        command: list[str]
+        wait_log: str
         cgroup_memory_mb: int | None = None
 
     backend: Backend
