@@ -7,10 +7,10 @@ warmup_time_secs: 5
 sample_size: 50
 backend:
   image: "ghcr.io/murrdb/murr:0.2.0"
-  # cgroup_memory_mb: 4096            # cap container RAM (and OS page cache for mmap); omit = unlimited
+  cgroup_memory_mb: 4096            # cap container RAM (and OS page cache for mmap); omit = unlimited
 
   
-  mmap: {}
+#  mmap: {}
     # bloom_bits_per_key: 4
     # hash_table_ratio: 0.75            # PlainTable hash utilization (lower = fewer collisions, more space)
     # index_sparseness: 16               # stride between sparse-index entries (lower = faster, more memory)
@@ -19,7 +19,8 @@ backend:
 #    write_buffer_size: 268435456      # 256 MiB
 #    target_file_size_base: 1073741824 # 1 GiB
 #    disable_auto_compactions: false
-
+#   read_method: par_get
+  block: {}
   # block:
   #   bloom_filter_bits_per_key: null  # null = bloom disabled
   #   whole_key_filtering: true        # only meaningful when bloom is enabled
@@ -37,3 +38,4 @@ backend:
   #   write_buffer_size: 268435456     # 256 MiB
   #   target_file_size_base: 1073741824 # 1 GiB
   #   disable_auto_compactions: false
+  #   read_method: multi_get  

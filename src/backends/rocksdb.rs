@@ -106,7 +106,20 @@ impl Backend for RocksDb {
     async fn init(config: &BenchConfig<Self::Config>) -> Self {
         let cfg = &config.backend;
         let data_dir = &cfg.data_dir;
-        std::fs::create_dir_all(data_dir).expect("failed to create data_dir");
+        match std::fs::read_dir(data_dir) {
+            Ok(mut entries) => {
+                if entries.next().is_some() {
+                    panic!(
+                        "RocksDB data_dir {} is not empty; remove it before running the benchmark",
+                        data_dir.display()
+                    );
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::create_dir_all(data_dir).expect("failed to create data_dir");
+            }
+            Err(e) => panic!("failed to inspect data_dir {}: {e}", data_dir.display()),
+        }
 
         let mut opts = rocksdb::Options::default();
         opts.create_if_missing(true);
@@ -244,7 +257,31 @@ impl Backend for RocksDb {
     }
 
     async fn memory_usage(&self) -> crate::backend::MemoryUsage {
-        crate::stats::mem::MemoryUsage::for_process()
+        let block_cache = self
+            .db
+            .property_int_value("rocksdb.block-cache-usage")
+            .ok()
+            .flatten()
+            .unwrap_or(0);
+        let table_readers = self
+            .db
+            .property_int_value("rocksdb.estimate-table-readers-mem")
+            .ok()
+            .flatten()
+            .unwrap_or(0);
+        let memtable = self
+            .db
+            .property_int_value("rocksdb.cur-size-all-mem-tables")
+            .ok()
+            .flatten()
+            .unwrap_or(0);
+        let engine = block_cache + table_readers + memtable;
+        let shared_bytes = crate::stats::mem::MemoryUsage::for_process().shared_bytes;
+        crate::backend::MemoryUsage {
+            rss_bytes: engine,
+            shared_bytes,
+            total_bytes: shared_bytes + engine,
+        }
     }
 
     async fn disk_usage(&self) -> crate::backend::DiskUsage {
