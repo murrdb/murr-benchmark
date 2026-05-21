@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use serde::Deserialize;
-use tokio_postgres::types::Type;
+use tokio_postgres::binary_copy::BinaryCopyInWriter;
+use tokio_postgres::types::{ToSql, Type};
 
 use crate::backend::{Backend, Batch};
 use crate::config::{BackendConfig, BenchConfig};
@@ -76,42 +77,41 @@ impl Backend for PgFeast {
 
     async fn write_batch(&self, batch: &Batch) {
         let value_cols = batch.value_columns();
+        let num_cols = value_cols.len();
         let num_rows = batch.keys.len();
-        let params_per_row = 1 + value_cols.len();
 
-        // Pre-extract all f32 values into a flat vec so we can reference them.
-        let mut float_values: Vec<f32> = Vec::with_capacity(num_rows * value_cols.len());
+        // Flatten f32 values so we can take stable references into the BinaryCopyInWriter.
+        let mut float_values: Vec<f32> = Vec::with_capacity(num_rows * num_cols);
         for row in 0..num_rows {
             for col in &value_cols {
                 float_values.push(col.value(row));
             }
         }
 
-        let mut placeholders = Vec::with_capacity(num_rows);
-        let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
-            Vec::with_capacity(num_rows * params_per_row);
+        let col_names: Vec<String> = (0..num_cols).map(|i| format!("col_{i}")).collect();
+        let mut types: Vec<Type> = Vec::with_capacity(1 + num_cols);
+        types.push(Type::TEXT);
+        types.extend(std::iter::repeat_n(Type::FLOAT4, num_cols));
 
-        for (row, key) in batch.keys.iter().enumerate() {
-            let base = row * params_per_row;
-            let row_placeholders: Vec<String> = (0..params_per_row)
-                .map(|i| format!("${}", base + i + 1))
-                .collect();
-            placeholders.push(format!("({})", row_placeholders.join(", ")));
-
-            params.push(key);
-            let float_offset = row * value_cols.len();
-            for i in 0..value_cols.len() {
-                params.push(&float_values[float_offset + i]);
-            }
-        }
-
-        let col_names: Vec<String> = (0..value_cols.len()).map(|i| format!("col_{i}")).collect();
         let sql = format!(
-            "INSERT INTO bench (key, {}) VALUES {}",
-            col_names.join(", "),
-            placeholders.join(", ")
+            "COPY bench (key, {}) FROM STDIN BINARY",
+            col_names.join(", ")
         );
-        self.pg.client.execute(&sql, &params).await.unwrap();
+        let sink = self.pg.client.copy_in(&sql).await.unwrap();
+        let writer = BinaryCopyInWriter::new(sink, &types);
+        tokio::pin!(writer);
+
+        let mut row_refs: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(1 + num_cols);
+        for (row, key) in batch.keys.iter().enumerate() {
+            row_refs.clear();
+            row_refs.push(key);
+            let float_offset = row * num_cols;
+            for i in 0..num_cols {
+                row_refs.push(&float_values[float_offset + i]);
+            }
+            writer.as_mut().write(&row_refs).await.unwrap();
+        }
+        writer.finish().await.unwrap();
     }
 
     async fn flush(&self) {
