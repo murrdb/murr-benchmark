@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import stat
 import tempfile
 from pathlib import Path
 
@@ -48,6 +50,12 @@ class MurrHttp(Backend):
         yaml.safe_dump(server_yaml, tmp)
         tmp.close()
         self._config_file = Path(tmp.name)
+        # mkstemp creates the file 0600; the murr container's user UID may not
+        # match the host user (esp. on CI), so widen to world-readable.
+        os.chmod(
+            self._config_file,
+            stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH,
+        )
 
         self._container = (
             DockerContainer(self.config.backend.image)
