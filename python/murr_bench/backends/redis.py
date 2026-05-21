@@ -25,16 +25,16 @@ class RedisFeast(Backend):
         self._redis: aioredis.Redis | None = None
 
     async def init(self) -> None:
-        self._container = DockerContainer(self.config.backend.image).with_exposed_ports(
-            REDIS_PORT
+        self._container = (
+            DockerContainer(self.config.backend.image)
+            .with_exposed_ports(REDIS_PORT)
+            .with_command(self.config.backend.command)
         )
         if self.config.backend.cgroup_memory_mb is not None:
             self._container = self._container.with_kwargs(
                 mem_limit=f"{self.config.backend.cgroup_memory_mb}m"
             )
-        self._container.waiting_for(
-            LogMessageWaitStrategy("Ready to accept connections")
-        )
+        self._container.waiting_for(LogMessageWaitStrategy(self.config.backend.wait_log))
         self._container.start()
         host = self._container.get_container_host_ip()
         port = self._container.get_exposed_port(REDIS_PORT)
@@ -105,27 +105,13 @@ class RedisFeatureBlob(Backend):
         self._container = (
             DockerContainer(self.config.backend.image)
             .with_exposed_ports(REDIS_PORT)
-            .with_command(
-                [
-                    "redis-server",
-                    "--save",
-                    "",
-                    "--appendonly",
-                    "no",
-                    "--io-threads",
-                    "4",
-                    "--io-threads-do-reads",
-                    "yes",
-                ]
-            )
+            .with_command(self.config.backend.command)
         )
         if self.config.backend.cgroup_memory_mb is not None:
             self._container = self._container.with_kwargs(
                 mem_limit=f"{self.config.backend.cgroup_memory_mb}m"
             )
-        self._container.waiting_for(
-            LogMessageWaitStrategy("Ready to accept connections")
-        )
+        self._container.waiting_for(LogMessageWaitStrategy(self.config.backend.wait_log))
         self._container.start()
         host = self._container.get_container_host_ip()
         port = self._container.get_exposed_port(REDIS_PORT)
