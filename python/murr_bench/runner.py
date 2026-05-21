@@ -121,7 +121,6 @@ def run_benchmark(
         f"--warmups={config.warmup_time_secs}",
         "--worker",
         f"--loops={loops}",
-        "--verbose",
     ] + pyperf_args
     sys.argv = [sys.argv[0]] + pyperf_cli
 

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
+import httpx
 import pandas as pd
 import pyarrow as pa
 from murr import MurrClientAsync, TableSchema, ColumnSchema, DType
@@ -34,12 +36,14 @@ class MurrHttp(Backend):
             )
         self._container.waiting_for(LogMessageWaitStrategy("Starting murr"))
         self._container.start()
+        await asyncio.sleep(1.0)
 
         host = self._container.get_container_host_ip()
         port = self._container.get_exposed_port(MURR_PORT)
         endpoint = f"http://{host}:{port}"
 
         self._client = MurrClientAsync(endpoint)
+        self._client._client.timeout = httpx.Timeout(120.0)
 
         columns: dict[str, ColumnSchema] = {
             "key": ColumnSchema(dtype=DType.UTF8, nullable=False),
