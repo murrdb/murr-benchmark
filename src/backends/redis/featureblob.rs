@@ -37,15 +37,15 @@ impl Backend for RedisFeatureBlob {
         let mut con = self.redis.con.clone();
         let value_cols = batch.value_columns();
 
-        let mut pipe = redis::pipe();
+        let mut items: Vec<(&str, Vec<u8>)> = Vec::with_capacity(batch.keys.len());
         for (row, key) in batch.keys.iter().enumerate() {
             let mut blob = Vec::with_capacity(value_cols.len() * 4);
             for col in &value_cols {
                 blob.extend_from_slice(&col.value(row).to_le_bytes());
             }
-            pipe.set(key.as_str(), blob).ignore();
+            items.push((key.as_str(), blob));
         }
-        pipe.query_async::<()>(&mut con).await.unwrap();
+        let _: () = con.mset(&items).await.unwrap();
     }
 
     async fn read(&self, keys: &[String], _columns: &[String]) -> Self::Response {
