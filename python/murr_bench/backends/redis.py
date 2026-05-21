@@ -143,10 +143,11 @@ class RedisFeatureBlob(Backend):
         raw = np.ascontiguousarray(values).tobytes()
         stride = num_cols * 4
 
-        pipe = self._redis.pipeline(transaction=False)
-        for row_idx, key in enumerate(keys):
-            pipe.set(key, raw[row_idx * stride : (row_idx + 1) * stride])
-        await pipe.execute()
+        mapping = {
+            key: raw[row_idx * stride : (row_idx + 1) * stride]
+            for row_idx, key in enumerate(keys)
+        }
+        await self._redis.mset(mapping)
 
     async def read(self, keys: list[str], columns: list[str]) -> pd.DataFrame:
         assert self._redis is not None
