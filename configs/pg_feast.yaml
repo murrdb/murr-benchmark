@@ -1,20 +1,20 @@
 total_rows: 100000000
 select_rows: 1000
 select_cols: 10
-write_batch_size: 5000
+write_batch_size: 50000
 measurement_time_secs: 30
 warmup_time_secs: 2
 sample_size: 50
 backend:
   memory:
-    image: "postgres:18.3"
+    image: "postgres:18.4"
     # cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited
     shared_buffers: "16GB"
     work_mem: "16MB"
     effective_cache_size: "32GB"
   disk:
-    image: "postgres:18.3"
-    cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited
+    image: "postgres:18.4"
+    cgroup_memory_mb: 2048            # cap container RAM; omit = unlimited
     shared_buffers: "1GB"
     work_mem: "16MB"
     effective_cache_size: "2GB"
