@@ -31,7 +31,7 @@ impl RedisContainer {
 
         let container = GenericImage::new(name, tag)
             .with_exposed_port(REDIS_PORT.into())
-            .with_wait_for(testcontainers::core::WaitFor::message_on_stdout(wait_log))
+            .with_wait_for(testcontainers::core::WaitFor::message_on_either_std(wait_log))
             .with_cmd(command)
             .with_host_config_modifier(move |hc| {
                 hc.memory = cgroup_memory_mb.map(|mb| mb * 1024 * 1024)

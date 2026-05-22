@@ -44,6 +44,22 @@ name = "redis_feast"
 harness = false
 
 [[bench]]
+name = "valkey_featureblob"
+harness = false
+
+[[bench]]
+name = "valkey_feast"
+harness = false
+
+[[bench]]
+name = "dragonfly_featureblob"
+harness = false
+
+[[bench]]
+name = "dragonfly_feast"
+harness = false
+
+[[bench]]
 name = "murr_embed"
 harness = false
 
