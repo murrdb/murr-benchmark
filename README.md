@@ -4,24 +4,24 @@ Benchmarks for [murr](https://github.com/murrdb/murr) — a columnar in-memory c
 
 ## Results: Rust time-to-last-byte benchmark
 
-100M rows, 10 Float32 columns, 1000 random key lookups per iteration. Disk is reported for backends that persist to disk; Redis/Valkey/Dragonfly are pure in-memory. Memory is the container `TOTAL` (RSS+SHR) delta around the load phase, except for RocksDB which is the embedded process RSS+SHR. Net TX is server-to-client bytes per read.
+100M rows, 10 Float32 columns, 1000 random key lookups per iteration. Disk is reported for backends that persist to disk; Redis/Valkey/Dragonfly are pure in-memory. Memory is the container `TOTAL` (RSS+SHR) delta around the load phase, except for RocksDB which is the embedded process RSS+SHR. Net TX is server-to-client bytes per read. PostgreSQL `disk` variant is cgroup-capped at 2 GiB RAM to force disk reads.
 
 | Engine | Layout | Memory | Disk | Ingestion | p50 latency | Net TX/read |
 |--------|--------|-------:|-----:|----------:|------------:|------------:|
-| [murr](https://github.com/murrdb/murr) 0.2.0 (mmap) | native | 7.5 GiB | 5.9 GiB | 948K rows/s | 268 µs | 42 KiB |
-| [murr](https://github.com/murrdb/murr) 0.2.0 (block) | native | 1.7 GiB | 5.8 GiB | 1.00M rows/s | 6.33 ms | 42 KiB |
+| murr 0.2.0 mmap | native | 7.5 GiB | 5.9 GiB | 948K rows/s | 268 µs | 42 KiB |
+| murr 0.2.0 block | native | 1.7 GiB | 5.8 GiB | 1.00M rows/s | 6.33 ms | 42 KiB |
 | Dragonfly | blob | 7.3 GiB | — | 4.01M rows/s | 296 µs | 46 KiB |
 | Dragonfly | hash | 20.1 GiB | — | 650K rows/s | 2.82 ms | 213 KiB |
 | Valkey 8.1 | blob | 8.9 GiB | — | 1.58M rows/s | 657 µs | 46 KiB |
 | Valkey 8.1 | hash | 19.4 GiB | — | 378K rows/s | 3.20 ms | 210 KiB |
 | Redis 8.6.3 | blob | 9.6 GiB | — | 1.43M rows/s | 815 µs | 46 KiB |
 | Redis 8.6.3 | hash | 20.1 GiB | — | 398K rows/s | 3.25 ms | 210 KiB |
-| RocksDB (plain) | blob | 5.7 GiB | 4.7 GiB | 2.72M rows/s | 831 µs | — |
-| RocksDB (block) | blob | 0.3 GiB | 5.4 GiB | 1.90M rows/s | 1.58 ms | — |
-| PostgreSQL 18.4 (memory) | blob | 24.0 GiB | 12.8 GiB | 400K rows/s | 5.69 ms | 62 KiB |
-| PostgreSQL 18.4 (disk, 2 GiB RAM) | blob | 2.0 GiB | 12.8 GiB | 329K rows/s | 189 ms | 62 KiB |
-| PostgreSQL 18.4 (memory) | col-per-feature | 23.4 GiB | 12.7 GiB | 384K rows/s | 6.54 ms | 86 KiB |
-| PostgreSQL 18.4 (disk, 2 GiB RAM) | col-per-feature | 2.0 GiB | 12.7 GiB | 327K rows/s | 217 ms | 86 KiB |
+| RocksDB plain | blob | 5.7 GiB | 4.7 GiB | 2.72M rows/s | 831 µs | — |
+| RocksDB block | blob | 0.3 GiB | 5.4 GiB | 1.90M rows/s | 1.58 ms | — |
+| pgsql 18.4 mem | blob | 24.0 GiB | 12.8 GiB | 400K rows/s | 5.69 ms | 62 KiB |
+| pgsql 18.4 disk | blob | 2.0 GiB | 12.8 GiB | 329K rows/s | 189 ms | 62 KiB |
+| pgsql 18.4 mem | col | 23.4 GiB | 12.7 GiB | 384K rows/s | 6.54 ms | 86 KiB |
+| pgsql 18.4 disk | col | 2.0 GiB | 12.7 GiB | 327K rows/s | 217 ms | 86 KiB |
 
 ## Benchmark methodology
 
@@ -160,23 +160,6 @@ cargo test
 # python
 cd python && uv run pytest tests/ -v
 ```
-
-## Results: Rust time-to-last-byte benchmark
-
-100M rows, 10 Float32 columns, 1000 random key lookups per iteration. All backends run on the same machine; container-backed ones use Docker via testcontainers. Memory is measured via Docker cgroup stats (container backends) or `/proc/self/statm` (embedded backends) as a before/after delta around the data load phase.
-
-| Engine | Layout | Disk | Memory | Ingestion | p95 read latency |
-|--------|--------|-----:|-------:|----------:|-----------------:|
-| [murr](https://github.com/murrdb/murr) 0.1.8 | columnar | 4.8 GiB | 9.5 GiB | 2.76M rows/s | 443 us |
-| Redis 8.6.1 | blob | 1.3 GiB | 10.6 GiB | 1.31M rows/s | 998 us |
-| Redis 8.6.1 | HSET | 8.2 GiB | 21.2 GiB | 381K rows/s | 4.30 ms |
-| RocksDB | blob | 4.3 GiB | 2.5 GiB | 2.40M rows/s | 3.85 ms |
-| PostgreSQL 17 | blob | 12.8 GiB | 13.7 GiB | 283K rows/s | 9.75 ms |
-| PostgreSQL 17 | col-per-feature | 12.7 GiB | 13.5 GiB | 138K rows/s | 8.79 ms |
-
-**Notes on memory measurement:**
-- Container backends (murr, Redis, PostgreSQL): memory delta is cgroup `usage`, which includes both anonymous (heap) and file-backed (mmap/page cache) pages.
-- Embedded backends (RocksDB): memory delta is RSS from `/proc/self/statm`. This captures heap allocations but not OS page cache for SST files, so the number underestimates true memory footprint compared to container backends.
 
 ## Results: Python end-to-end benchmark
 
