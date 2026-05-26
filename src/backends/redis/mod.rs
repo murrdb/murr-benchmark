@@ -43,7 +43,14 @@ impl RedisContainer {
         let host = container.get_host().await.unwrap();
         let port = container.get_host_port_ipv4(REDIS_PORT).await.unwrap();
         let client = redis::Client::open(format!("redis://{host}:{port}")).unwrap();
-        let con = client.get_multiplexed_async_connection().await.unwrap();
+        // redis-rs 1.x defaults to a 500ms per-response timeout, which is far
+        // shorter than the time a 100k-command pipeline takes to round-trip
+        // through the docker proxy. Disable it for benchmark workloads.
+        let aio_config = redis::AsyncConnectionConfig::new().set_response_timeout(None);
+        let con = client
+            .get_multiplexed_async_connection_with_config(&aio_config)
+            .await
+            .unwrap();
         Self {
             con,
             _container: Arc::new(container),

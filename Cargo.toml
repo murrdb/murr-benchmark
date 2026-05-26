@@ -32,7 +32,7 @@ tikv-jemallocator = "0.6"
 tokio-postgres = "0.7"
 
 [[bench]]
-name = "murrdb_http"
+name = "murr_http"
 harness = false
 
 [[bench]]

@@ -6,8 +6,12 @@ measurement_time_secs: 30
 warmup_time_secs: 2
 sample_size: 50
 backend:
-  redis:
+  # valkey_iothreads:
+  #   image: "valkey/valkey:8.1"
+  #   command: ["valkey-server", "--save", "", "--appendonly", "no", "--io-threads", "4", "--io-threads-do-reads", "yes"]
+  #   wait_log: "Ready to accept connections"
+  #   # cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited
+  valkey_default:
     image: "valkey/valkey:8.1"
-    command: ["valkey-server", "--save", "", "--appendonly", "no", "--io-threads", "4", "--io-threads-do-reads", "yes"]
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
     wait_log: "Ready to accept connections"
-    # cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited

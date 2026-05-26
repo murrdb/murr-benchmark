@@ -48,6 +48,11 @@ impl Bench {
             let label = format!("{group_name}/{variant_name}");
             info!("[{label}] backend: {:?}", config.backend);
 
+            // testcontainers' async Drop calls Handle::current(); without an
+            // entered runtime, a panic anywhere below would unwind into the
+            // container's drop and abort with "no reactor running".
+            let _rt_guard = rt.enter();
+
             info!("[{label}] initializing backend...");
             let backend = rt.block_on(B::init(&config));
             info!("[{label}] backend ready");
