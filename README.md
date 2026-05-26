@@ -1,6 +1,6 @@
 # murr-benchmark
 
-Benchmarks for [murr](https://github.com/murrdb/murr) — a columnar in-memory cache for AI/ML inference workloads.
+Benchmarks for [murr](https://github.com/murrdb/murr) — a RocksDB-based NVMe/S3 cache for AI/ML inference workloads.
 
 ## Results: Rust time-to-last-byte benchmark
 
@@ -48,13 +48,17 @@ Both harnesses share the same YAML config files and test data generation logic (
 
 | Backend | Transport | Container | Description |
 |---------|-----------|-----------|-------------|
-| `murrdb_http` | HTTP + Arrow IPC | `ghcr.io/murrdb/murr` | Murr columnar cache over its HTTP API |
+| `murr_http` | HTTP + Arrow IPC | `ghcr.io/murrdb/murr` | Murr server over HTTP (mmap and block storage modes) |
 | `murr_embed` | In-process | — | Murr embedded library (Rust only) |
-| `redis_feast` | Redis protocol | `redis` | Redis with Feast-style hash sets |
-| `redis_featureblob` | Redis protocol | `redis` | Redis with compact byte blobs |
+| `redis_feast` | RESP | `redis` | Redis with Feast-style HSET layout |
+| `redis_featureblob` | RESP | `redis` | Redis with packed byte-blob layout |
+| `valkey_feast` | RESP | `valkey/valkey` | Valkey with Feast-style HSET layout |
+| `valkey_featureblob` | RESP | `valkey/valkey` | Valkey with packed byte-blob layout |
+| `dragonfly_feast` | RESP | `dragonflydb/dragonfly` | Dragonfly with Feast-style HSET layout |
+| `dragonfly_featureblob` | RESP | `dragonflydb/dragonfly` | Dragonfly with packed byte-blob layout |
 | `rocksdb` | In-process | — | Local RocksDB key-value store |
-| `pg_feast` | PostgreSQL protocol | `postgres` | PostgreSQL with explicit typed columns |
-| `pg_featureblob` | PostgreSQL protocol | `postgres` | PostgreSQL with BYTEA blob column |
+| `pg_feast` | PostgreSQL | `postgres` | PostgreSQL with explicit typed columns |
+| `pg_featureblob` | PostgreSQL | `postgres` | PostgreSQL with BYTEA blob column |
 
 All container-backed backends use `testcontainers` to manage Docker lifecycle automatically.
 
@@ -62,7 +66,7 @@ All container-backed backends use `testcontainers` to manage Docker lifecycle au
 
 ### Feast (hash-per-row)
 
-Used by `redis_feast` and `pg_feast`. Each entity key maps to a set of individually named feature columns. In Redis this is an HSET with one field per feature; in PostgreSQL it is a table with explicit `REAL` columns.
+Used by `redis_feast`, `valkey_feast`, `dragonfly_feast`, and `pg_feast`. Each entity key maps to a set of individually named feature columns. In Redis-family backends this is an HSET with one field per feature; in PostgreSQL it is a table with explicit `REAL` columns.
 
 ```
 key="42" -> { col_0: 0.71, col_1: 0.33, col_2: 0.89, ... }
@@ -72,7 +76,7 @@ This layout mirrors [Feast](https://feast.dev/) online store format. It allows r
 
 ### Feature blob (packed binary)
 
-Used by `redis_featureblob`, `pg_featureblob`, and `rocksdb`. All feature values for an entity are concatenated into a single byte buffer of little-endian float32 values.
+Used by `redis_featureblob`, `valkey_featureblob`, `dragonfly_featureblob`, `pg_featureblob`, and `rocksdb`. All feature values for an entity are concatenated into a single byte buffer of little-endian float32 values.
 
 ```
 key="42" -> b"\xcd\xcc\x34\x3f\xa4\x70\xa8\x3e..."  (N × 4 bytes)
@@ -82,7 +86,7 @@ Compact and cache-friendly — a single read returns all features. The client un
 
 ### Arrow IPC (columnar)
 
-Used by `murrdb_http`. Data is exchanged as Apache Arrow IPC streams — a columnar binary format with zero-copy read support. Writes send `RecordBatch` via Arrow stream format; reads return the same.
+Used by `murr_http`. Data is exchanged as Apache Arrow IPC streams — a columnar binary wire format with zero-copy read support. Writes send `RecordBatch` via Arrow stream format; reads return the same. (Server-side storage is row-wise on top of RocksDB SSTables; columnar refers to the wire format.)
 
 ```
 POST /api/v1/table/bench/fetch  ->  Arrow IPC stream (RecordBatch)
@@ -127,10 +131,14 @@ cargo bench
 cargo bench --bench redis_featureblob
 
 # available benchmarks
-cargo bench --bench murrdb_http
+cargo bench --bench murr_http
 cargo bench --bench murr_embed
 cargo bench --bench redis_feast
 cargo bench --bench redis_featureblob
+cargo bench --bench valkey_feast
+cargo bench --bench valkey_featureblob
+cargo bench --bench dragonfly_feast
+cargo bench --bench dragonfly_featureblob
 cargo bench --bench rocksdb
 cargo bench --bench pg_feast
 cargo bench --bench pg_featureblob
@@ -157,6 +165,10 @@ uv run --project python murr-bench pg_feast -o results/pg_feast.json
 uv run --project python murr-bench murr_http
 uv run --project python murr-bench redis_feast
 uv run --project python murr-bench redis_featureblob
+uv run --project python murr-bench valkey_feast
+uv run --project python murr-bench valkey_featureblob
+uv run --project python murr-bench dragonfly_feast
+uv run --project python murr-bench dragonfly_featureblob
 uv run --project python murr-bench rocksdb
 uv run --project python murr-bench pg_feast
 uv run --project python murr-bench pg_featureblob
@@ -176,14 +188,33 @@ cd python && uv run pytest tests/ -v
 
 100M rows, 10 Float32 columns, 1000 random key lookups per iteration. Measures full round-trip latency including protocol decoding and `pd.DataFrame` conversion. Ingestion throughput includes Python-side serialization and batch writes.
 
+### Blob layouts
+
 | Engine | Layout | Ingestion | Read latency |
 |--------|--------|----------:|-------------:|
-| [murr](https://github.com/murrdb/murr) 0.1.8 | columnar | 2.34M rows/s | 1.38 ms |
-| Redis 8.6.1 | blob | 136K rows/s | 2.42 ms |
-| Redis 8.6.1 | HSET | 61K rows/s | 9.39 ms |
-| RocksDB | blob | 622K rows/s | 4.90 ms |
-| PostgreSQL 17 | blob | 356K rows/s | 10.8 ms |
-| PostgreSQL 17 | col-per-feature | 143K rows/s | 10.6 ms |
+| murr 0.2.0 mmap | native | 1.06M rows/s | 1.08 ms |
+| Dragonfly | blob | 524K rows/s | 1.68 ms |
+| Valkey 8.1 | blob | 436K rows/s | 2.04 ms |
+| Redis 8.6.3 | blob | 421K rows/s | 2.46 ms |
+| pgsql 18.4 | blob | 298K rows/s | 28.6 ms |
+
+### Hash / col-per-feature layouts
+
+| Engine | Layout | Ingestion | Read latency |
+|--------|--------|----------:|-------------:|
+| murr 0.2.0 mmap | native | 1.06M rows/s | 1.08 ms |
+| Dragonfly | hash | 64K rows/s | 8.25 ms |
+| Valkey 8.1 | hash | 62K rows/s | 8.63 ms |
+| Redis 8.6.3 | hash | 62K rows/s | 8.50 ms |
+| pgsql 18.4 | col | 271K rows/s | 13.8 ms |
+
+### Disk mode (2 GiB RAM cap)
+
+| Engine | Layout | Ingestion | Read latency |
+|--------|--------|----------:|-------------:|
+| murr 0.2.0 block | native | 662K rows/s | 6.69 ms |
+| pgsql 18.4 | blob | 317K rows/s | 171 ms |
+| pgsql 18.4 | col | 303K rows/s | 153 ms |
 
 ## License
 
