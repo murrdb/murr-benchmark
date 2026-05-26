@@ -11,7 +11,7 @@ Benchmarks for [murr](https://github.com/murrdb/murr) — a columnar in-memory c
 | Engine | Layout | Memory | Disk | Ingestion | p50 latency | Net TX/read |
 |--------|--------|-------:|-----:|----------:|------------:|------------:|
 | murr 0.2.0 mmap | native | 7.5 GiB | 5.9 GiB | 948K rows/s | 268 µs | 42 KiB |
-| Dragonfly | blob | 7.3 GiB | — | 4.01M rows/s | 296 µs | 46 KiB |
+| Dragonfly 1.31 | blob | 7.3 GiB | — | 4.01M rows/s | 296 µs | 46 KiB |
 | Valkey 8.1 | blob | 8.9 GiB | — | 1.58M rows/s | 657 µs | 46 KiB |
 | Redis 8.6.3 | blob | 9.6 GiB | — | 1.43M rows/s | 815 µs | 46 KiB |
 | pgsql 18.4 | blob | 24.0 GiB | 12.8 GiB | 400K rows/s | 5.69 ms | 62 KiB |
@@ -21,7 +21,7 @@ Benchmarks for [murr](https://github.com/murrdb/murr) — a columnar in-memory c
 | Engine | Layout | Memory | Disk | Ingestion | p50 latency | Net TX/read |
 |--------|--------|-------:|-----:|----------:|------------:|------------:|
 | murr 0.2.0 mmap | native | 7.5 GiB | 5.9 GiB | 948K rows/s | 268 µs | 42 KiB |
-| Dragonfly | hash | 20.1 GiB | — | 650K rows/s | 2.82 ms | 213 KiB |
+| Dragonfly 1.31 | hash | 20.1 GiB | — | 650K rows/s | 2.82 ms | 213 KiB |
 | Valkey 8.1 | hash | 19.4 GiB | — | 378K rows/s | 3.20 ms | 210 KiB |
 | Redis 8.6.3 | hash | 20.1 GiB | — | 398K rows/s | 3.25 ms | 210 KiB |
 | pgsql 18.4 | col | 23.4 GiB | 12.7 GiB | 384K rows/s | 6.54 ms | 86 KiB |
