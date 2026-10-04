@@ -52,13 +52,12 @@ impl MurrHttp {
         let mut columns = serde_json::Map::new();
         columns.insert(
             "key".to_string(),
-            json!({"dtype": "utf8", "nullable": false}),
+            json!({"dtype": "utf8", "nullable": false, "key": true}),
         );
         for name in testdata::column_names(num_cols) {
             columns.insert(name, json!({"dtype": "float32", "nullable": false}));
         }
         json!({
-            "key": "key",
             "columns": columns,
         })
     }
@@ -82,7 +81,7 @@ impl Backend for MurrHttp {
         let container = GenericImage::new(image_name, image_tag)
             .with_exposed_port(MURR_PORT.into())
             .with_wait_for(testcontainers::core::WaitFor::message_on_stderr(
-                "Starting murr",
+                "HTTP listen",
             ))
             .with_copy_to(CONTAINER_CONFIG_PATH, server_yaml.into_bytes())
             .with_cmd(["--config", CONTAINER_CONFIG_PATH])
@@ -155,7 +154,7 @@ impl Backend for MurrHttp {
 
     async fn read(&self, keys: &[String], columns: &[String]) -> Self::Response {
         let body = json!({
-            "keys": keys,
+            "keys": {"key": keys},
             "columns": columns,
         });
         let resp = self
@@ -167,6 +166,20 @@ impl Backend for MurrHttp {
             .await
             .unwrap();
         resp.bytes().await.unwrap()
+    }
+
+    async fn flush(&self) {
+        let resp = self
+            .client
+            .post(format!("{}/api/v1/table/bench/compact", self.base_url))
+            .send()
+            .await
+            .expect("failed to compact table");
+        assert!(
+            resp.status().is_success(),
+            "compact failed: {}",
+            resp.status()
+        );
     }
 
     async fn memory_usage(&self) -> crate::stats::mem::MemoryUsage {
@@ -204,7 +217,7 @@ mod tests {
             warmup_time_secs: 1,
             sample_size: 1,
             backend: MurrHttpConfig {
-                image: "ghcr.io/murrdb/murr:latest".to_string(),
+                image: "ghcr.io/murrdb/murr:0.3.0".to_string(),
                 cgroup_memory_mb: None,
                 storage,
             },

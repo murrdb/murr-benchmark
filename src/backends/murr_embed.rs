@@ -1,12 +1,14 @@
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
+use arrow::array::{ArrayRef, StringArray};
 use arrow::record_batch::RecordBatch;
 use indexmap::IndexMap;
 use serde::Deserialize;
 
 use murr::conf::{BackendConfig as StorageBackend, Config, StorageConfig};
-use murr::core::{ColumnSchema, DType, TableSchema};
+use murr::core::{ColumnSchema, DTypeName, FetchRequest, TableSchema};
+use murr::io::store::rocksdb::RocksDBStore;
 use murr::service::MurrService;
 
 use crate::backend::{Backend, Batch};
@@ -24,7 +26,7 @@ impl BackendConfig for MurrEmbedConfig {}
 
 #[derive(Clone)]
 pub struct MurrEmbed {
-    svc: Arc<MurrService>,
+    svc: Arc<MurrService<RocksDBStore>>,
     data_dir: PathBuf,
 }
 
@@ -34,23 +36,24 @@ impl MurrEmbed {
         columns.insert(
             "key".to_string(),
             ColumnSchema {
-                dtype: DType::Utf8,
+                dtype: DTypeName::Utf8,
                 nullable: false,
+                key: true,
+                strict: true,
             },
         );
         for name in testdata::column_names(num_cols) {
             columns.insert(
                 name,
                 ColumnSchema {
-                    dtype: DType::Float32,
+                    dtype: DTypeName::Float32,
                     nullable: false,
+                    key: false,
+                    strict: true,
                 },
             );
         }
-        TableSchema {
-            key: "key".to_string(),
-            columns,
-        }
+        TableSchema { columns }
     }
 }
 
@@ -70,7 +73,8 @@ impl Backend for MurrEmbed {
             ..Config::default()
         };
 
-        let svc = MurrService::new(murr_config).unwrap();
+        let store = RocksDBStore::open_from_config(&murr_config.storage).unwrap();
+        let svc = MurrService::new(Arc::new(RwLock::new(store)), murr_config).unwrap();
         let table_schema = Self::build_table_schema(config.select_cols);
         svc.create("bench", table_schema).unwrap();
 
@@ -85,9 +89,16 @@ impl Backend for MurrEmbed {
     }
 
     async fn read(&self, keys: &[String], columns: &[String]) -> Self::Response {
-        let key_refs: Vec<&str> = keys.iter().map(|s| s.as_str()).collect();
-        let col_refs: Vec<&str> = columns.iter().map(|s| s.as_str()).collect();
-        self.svc.read("bench", &key_refs, &col_refs).unwrap()
+        let key_col: ArrayRef = Arc::new(StringArray::from_iter_values(keys));
+        let request = FetchRequest {
+            keys: RecordBatch::try_from_iter([("key", key_col)]).unwrap(),
+            columns: columns.to_vec(),
+        };
+        self.svc.read("bench", &request).unwrap()
+    }
+
+    async fn flush(&self) {
+        self.svc.compact("bench").unwrap();
     }
 
     async fn memory_usage(&self) -> crate::backend::MemoryUsage {

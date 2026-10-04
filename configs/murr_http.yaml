@@ -9,7 +9,7 @@ backend:
   # Storage backends are mutually exclusive; we run both for a head-to-head.
   # The shared image/cgroup_memory_mb settings are duplicated per variant.
   mmap:
-    image: "ghcr.io/murrdb/murr:0.2.0"
+    image: "ghcr.io/murrdb/murr:0.3.0"
     # cgroup_memory_mb: 4096            # cap container RAM (and OS page cache for mmap); omit = unlimited
     mmap: {}
       # bloom_bits_per_key: 4
@@ -23,7 +23,7 @@ backend:
       # read_method: par_get
 
   block:
-    image: "ghcr.io/murrdb/murr:0.2.0"
+    image: "ghcr.io/murrdb/murr:0.3.0"
     cgroup_memory_mb: 2048
     block: {}
       # bloom_filter_bits_per_key: null  # null = bloom disabled

@@ -4,7 +4,7 @@ use crate::backend::{Backend, Batch};
 use crate::config::BenchConfig;
 use crate::testdata;
 
-/// Shared integration test: init → write → read → cleanup.
+/// Shared integration test: init → write → flush → read → cleanup.
 ///
 /// Verifies the full backend lifecycle completes without panicking.
 /// Uses small parameters for fast execution.
@@ -29,6 +29,7 @@ pub async fn test_backend_roundtrip<B: Backend>(config: BenchConfig<B::Config>) 
         };
         backend.write_batch(&batch).await;
     }
+    backend.flush().await;
 
     let mem = backend.memory_usage().await;
     assert!(mem.rss_bytes > 0, "expected non-zero RSS");
