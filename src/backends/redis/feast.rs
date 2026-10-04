@@ -125,7 +125,7 @@ mod tests {
             warmup_time_secs: 1,
             sample_size: 1,
             backend: RedisFeastConfig {
-                image: "redis:latest".to_string(),
+                image: "redis:8.10.2".to_string(),
                 read_mode: ReadMode::Hgetall,
                 command: redis_command(),
                 wait_log: "Ready to accept connections".to_string(),
@@ -146,7 +146,7 @@ mod tests {
             warmup_time_secs: 1,
             sample_size: 1,
             backend: RedisFeastConfig {
-                image: "redis:latest".to_string(),
+                image: "redis:8.10.2".to_string(),
                 read_mode: ReadMode::Hmget,
                 command: redis_command(),
                 wait_log: "Ready to accept connections".to_string(),

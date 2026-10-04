@@ -91,7 +91,7 @@ mod tests {
             warmup_time_secs: 1,
             sample_size: 1,
             backend: RedisFeatureBlobConfig {
-                image: "redis:latest".to_string(),
+                image: "redis:8.10.2".to_string(),
                 command: ["redis-server", "--save", "", "--appendonly", "no"]
                     .iter()
                     .map(|s| s.to_string())

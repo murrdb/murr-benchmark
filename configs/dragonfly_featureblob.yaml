@@ -7,7 +7,7 @@ warmup_time_secs: 2
 sample_size: 50
 backend:
   redis:
-    image: "docker.dragonflydb.io/dragonflydb/dragonfly:latest"
+    image: "docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0"
     command: ["dragonfly", "--logtostderr", "--max_multi_bulk_len=1000000"]
     wait_log: "AcceptServer - listening on"
     # cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited

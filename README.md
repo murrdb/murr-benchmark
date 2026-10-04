@@ -109,7 +109,7 @@ measurement_time_secs: 10   # minimum measurement duration
 warmup_time_secs: 2         # warmup duration before measurement
 sample_size: 10             # number of measured samples
 backend:
-  image: "redis:8.6.1"      # Docker image (container-backed backends)
+  image: "redis:8.10.2"     # Docker image (container-backed backends)
 ```
 
 Backend-specific fields:

@@ -7,13 +7,13 @@ warmup_time_secs: 2
 sample_size: 50
 backend:
   # valkey_iothreads:
-  #   image: "valkey/valkey:8.1"
+  #   image: "valkey/valkey:9.1"
   #   command: ["valkey-server", "--save", "", "--appendonly", "no", "--io-threads", "4", "--io-threads-do-reads", "yes"]
   #   wait_log: "Ready to accept connections"
   #   read_mode: hgetall
   #   # cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited
   valkey_default:
-    image: "valkey/valkey:8.1"
+    image: "valkey/valkey:9.1"
     command: ["valkey-server", "--save", "", "--appendonly", "no"]
     wait_log: "Ready to accept connections"
     read_mode: hgetall
