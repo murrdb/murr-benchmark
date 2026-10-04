@@ -7,11 +7,10 @@ import stat
 import tempfile
 from pathlib import Path
 
-import httpx
 import pandas as pd
 import pyarrow as pa
 import yaml
-from murr import MurrClientAsync, TableSchema, ColumnSchema, DType
+from murr.client import Client, ColumnSchema, DType, TableSchema
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.wait_strategies import LogMessageWaitStrategy
 
@@ -30,7 +29,7 @@ class MurrHttp(Backend):
     def __init__(self, config: MurrHttpConfig) -> None:
         self.config = config
         self._container: DockerContainer | None = None
-        self._client: MurrClientAsync | None = None
+        self._client: Client | None = None
         self._config_file: Path | None = None
 
     async def init(self) -> None:
@@ -69,7 +68,7 @@ class MurrHttp(Backend):
             self._container = self._container.with_kwargs(
                 mem_limit=f"{self.config.backend.cgroup_memory_mb}m"
             )
-        self._container.waiting_for(LogMessageWaitStrategy("Starting murr"))
+        self._container.waiting_for(LogMessageWaitStrategy("HTTP listen"))
         self._container.start()
         await asyncio.sleep(1.0)
 
@@ -77,18 +76,15 @@ class MurrHttp(Backend):
         port = self._container.get_exposed_port(MURR_PORT)
         endpoint = f"http://{host}:{port}"
 
-        self._client = MurrClientAsync(endpoint)
-        self._client._client.timeout = httpx.Timeout(120.0)
+        self._client = Client(endpoint, timeout=120.0)
 
         columns: dict[str, ColumnSchema] = {
-            "key": ColumnSchema(dtype=DType.UTF8, nullable=False),
+            "key": ColumnSchema(dtype=DType.UTF8, nullable=False, key=True),
         }
         for name in column_names(self.config.select_cols):
             columns[name] = ColumnSchema(dtype=DType.FLOAT32, nullable=False)
 
-        await self._client.create_table(
-            "bench", TableSchema(key="key", columns=columns)
-        )
+        await self._client.create_table("bench", TableSchema(columns=columns))
         logger.info(
             "murr_http: table created at %s (storage=%s)",
             endpoint,
@@ -101,8 +97,12 @@ class MurrHttp(Backend):
 
     async def read(self, keys: list[str], columns: list[str]) -> pd.DataFrame:
         assert self._client is not None
-        rb = await self._client.read("bench", keys, columns)
-        return rb.to_pandas()
+        table = await self._client.read("bench", {"key": keys}, columns)
+        return table.to_pandas()
+
+    async def flush(self) -> None:
+        assert self._client is not None
+        await self._client.compact("bench")
 
     async def cleanup(self) -> None:
         if self._client is not None:

@@ -165,15 +165,16 @@ wheels = [
 
 [[package]]
 name = "murr"
-version = "0.1.6"
+version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx", marker = "sys_platform == 'linux'" },
     { name = "pyarrow", marker = "sys_platform == 'linux'" },
     { name = "pydantic", marker = "sys_platform == 'linux'" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/f4/4a/45530f102b6625de8b1d38fce8c9cab9243830a832e3678bdfaa5863f24e/murr-0.3.0.tar.gz", hash = "sha256:1119f3eeeb06fefafca45fd42429b1ced4921accbf9a81c0142b7d23a9f8f3bb", size = 53829, upload-time = "2026-10-04T20:46:06.305Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/69/b7/c8646d12854d5f146c5ce3bc29da1ba291bdd8ff04ae9df71afce64336c9/murr-0.1.6-cp314-cp314-manylinux_2_34_x86_64.whl", hash = "sha256:84bf76def126fca262ae2d70645f77c72c4699ed5eeaf2a5ef9c28e2cfbe1938", size = 3847809, upload-time = "2026-03-18T17:27:30.41Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/b7/57d422fc533a1ead9fbc79dc55826fd3e5635993afe5807d0c31c9008d91/murr-0.3.0-py3-none-any.whl", hash = "sha256:8809df7d74b73386911e10ea213ef7d0b39348d81b7ea843cca3a2ac8776d6b2", size = 10962, upload-time = "2026-10-04T20:46:05.338Z" },
 ]
 
 [[package]]
@@ -204,7 +205,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28" },
-    { name = "murr", specifier = ">=0.1.6" },
+    { name = "murr", specifier = ">=0.3.0" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "pandas", specifier = ">=2.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
