@@ -169,7 +169,7 @@ mod tests {
             warmup_time_secs: 1,
             sample_size: 1,
             backend: PgFeastConfig {
-                image: "postgres:18.3".to_string(),
+                image: "postgres:18.6".to_string(),
                 cgroup_memory_mb: None,
                 shared_buffers: default_shared_buffers(),
                 work_mem: default_work_mem(),

@@ -12,7 +12,7 @@ async def test_feast():
         measurement_time_secs=MEASUREMENT_TIME_SECS,
         warmup_time_secs=WARMUP_TIME_SECS,
         sample_size=SAMPLE_SIZE,
-        backend=PgFeastConfig.Backend(image="postgres:17"),
+        backend=PgFeastConfig.Backend(image="postgres:18.6"),
     ))
     await roundtrip(backend)
 
@@ -26,6 +26,6 @@ async def test_featureblob():
         measurement_time_secs=MEASUREMENT_TIME_SECS,
         warmup_time_secs=WARMUP_TIME_SECS,
         sample_size=SAMPLE_SIZE,
-        backend=PgFeatureBlobConfig.Backend(image="postgres:17"),
+        backend=PgFeatureBlobConfig.Backend(image="postgres:18.6"),
     ))
     await roundtrip(backend)

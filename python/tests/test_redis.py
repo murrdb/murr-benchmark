@@ -16,7 +16,7 @@ async def test_feast_hgetall():
         warmup_time_secs=WARMUP_TIME_SECS,
         sample_size=SAMPLE_SIZE,
         backend=RedisFeastConfig.Backend(
-            image="redis:latest",
+            image="redis:8.10.2",
             read_mode="hgetall",
             command=REDIS_COMMAND,
             wait_log=REDIS_WAIT_LOG,
@@ -35,7 +35,7 @@ async def test_feast_hmget():
         warmup_time_secs=WARMUP_TIME_SECS,
         sample_size=SAMPLE_SIZE,
         backend=RedisFeastConfig.Backend(
-            image="redis:latest",
+            image="redis:8.10.2",
             read_mode="hmget",
             command=REDIS_COMMAND,
             wait_log=REDIS_WAIT_LOG,
@@ -54,7 +54,7 @@ async def test_featureblob():
         warmup_time_secs=WARMUP_TIME_SECS,
         sample_size=SAMPLE_SIZE,
         backend=RedisFeatureBlobConfig.Backend(
-            image="redis:latest",
+            image="redis:8.10.2",
             command=REDIS_COMMAND,
             wait_log=REDIS_WAIT_LOG,
         ),
