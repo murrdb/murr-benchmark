@@ -13,7 +13,7 @@ async def test_roundtrip():
         warmup_time_secs=WARMUP_TIME_SECS,
         sample_size=SAMPLE_SIZE,
         backend=MurrHttpConfig.Backend(
-            image="ghcr.io/murrdb/murr:latest",
+            image="ghcr.io/murrdb/murr:0.3.0",
             # murr's StorageConfig requires either `mmap` or `block` once we
             # mount our own config.yaml; an empty `mmap: {}` selects defaults.
             mmap={},
