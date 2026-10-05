@@ -9,6 +9,8 @@ impl From<&Value> for serde_json::Value {
         match value {
             Value::Utf8(s) => serde_json::Value::from(s.as_str()),
             Value::Float32(v) => serde_json::Value::from(*v),
+            Value::Float64(v) => serde_json::Value::from(*v),
+            Value::Int64(v) => serde_json::Value::from(*v),
         }
     }
 }
@@ -67,5 +69,11 @@ mod tests {
             serde_json::Value::Object(encoded),
             json!({"geid": ["TB_AE", "TB_AE"], "vendor": ["a", "b"]})
         );
+    }
+
+    #[test]
+    fn numbers_keep_their_json_kind() {
+        assert_eq!(serde_json::Value::from(&Value::Float64(1.5)), json!(1.5));
+        assert_eq!(serde_json::Value::from(&Value::Int64(-7)), json!(-7));
     }
 }

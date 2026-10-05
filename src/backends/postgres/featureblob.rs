@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use serde::Deserialize;
@@ -109,7 +110,7 @@ impl Backend for PgFeatureBlob {
     }
 
     async fn read(&self, request: &Request) -> Self::Response {
-        let keys: Vec<&str> = request.keys.iter().map(|k| self.key.encode(k)).collect();
+        let keys: Vec<Cow<str>> = request.keys.iter().map(|k| self.key.encode(k)).collect();
         self.pg
             .client
             .query(&*self.read_stmt, &[&keys])

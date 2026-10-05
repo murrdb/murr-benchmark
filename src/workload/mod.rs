@@ -1,17 +1,25 @@
+pub mod file;
 pub mod synthetic;
 
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum DType {
     Utf8,
     Float32,
+    Float64,
+    Int64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Utf8(String),
     Float32(f32),
+    Float64(f64),
+    Int64(i64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,8 +68,8 @@ pub trait Workload {
     /// Number of rows `rows()` yields.
     fn total_rows(&self) -> usize;
 
-    /// Number of keys in each request (the maximum, if it varies).
-    fn keys_per_request(&self) -> usize;
+    /// Number of keys in each request, or `None` if it varies between requests.
+    fn keys_per_request(&self) -> Option<usize>;
 
     fn rows(&self) -> Box<dyn Iterator<Item = Row> + '_>;
 

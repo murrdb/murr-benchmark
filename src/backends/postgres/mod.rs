@@ -21,6 +21,8 @@ impl From<DType> for Type {
         match dtype {
             DType::Utf8 => Type::TEXT,
             DType::Float32 => Type::FLOAT4,
+            DType::Float64 => Type::FLOAT8,
+            DType::Int64 => Type::INT8,
         }
     }
 }
@@ -34,11 +36,16 @@ impl ToSql for Value {
         match self {
             Value::Utf8(s) => s.to_sql(ty, out),
             Value::Float32(v) => v.to_sql(ty, out),
+            Value::Float64(v) => v.to_sql(ty, out),
+            Value::Int64(v) => v.to_sql(ty, out),
         }
     }
 
     fn accepts(ty: &Type) -> bool {
-        <String as ToSql>::accepts(ty) || <f32 as ToSql>::accepts(ty)
+        <String as ToSql>::accepts(ty)
+            || <f32 as ToSql>::accepts(ty)
+            || <f64 as ToSql>::accepts(ty)
+            || <i64 as ToSql>::accepts(ty)
     }
 
     to_sql_checked!();

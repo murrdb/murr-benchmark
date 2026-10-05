@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use redis::AsyncCommands;
@@ -52,7 +53,7 @@ impl Backend for RedisFeatureBlob {
     async fn write_batch(&self, batch: &RowBatch) {
         let mut con = self.redis.con.clone();
 
-        let mut items: Vec<(&str, Vec<u8>)> = Vec::with_capacity(batch.rows.len());
+        let mut items: Vec<(Cow<str>, Vec<u8>)> = Vec::with_capacity(batch.rows.len());
         for row in &batch.rows {
             let mut blob = Vec::new();
             self.blob.encode(row, &mut blob);
@@ -63,7 +64,7 @@ impl Backend for RedisFeatureBlob {
 
     async fn read(&self, request: &Request) -> Self::Response {
         let mut con = self.redis.con.clone();
-        let keys: Vec<&str> = request.keys.iter().map(|k| self.key.encode(k)).collect();
+        let keys: Vec<Cow<str>> = request.keys.iter().map(|k| self.key.encode(k)).collect();
         con.mget(keys).await.unwrap()
     }
 

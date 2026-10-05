@@ -52,8 +52,8 @@ impl Workload for SyntheticWorkload {
         self.config.total_rows
     }
 
-    fn keys_per_request(&self) -> usize {
-        self.config.select_rows
+    fn keys_per_request(&self) -> Option<usize> {
+        Some(self.config.select_rows)
     }
 
     fn rows(&self) -> Box<dyn Iterator<Item = Row> + '_> {

@@ -1,3 +1,4 @@
 /target/
 .perf
 .cargo
+configs/workload/dh/

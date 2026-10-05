@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use arrow::array::{ArrayRef, Float32Array, StringArray};
+use arrow::array::{ArrayRef, Float32Array, Float64Array, Int64Array, StringArray};
 use arrow::datatypes::{DataType, SchemaRef};
 use arrow::record_batch::RecordBatch;
 
@@ -13,6 +13,8 @@ impl From<DType> for DataType {
         match dtype {
             DType::Utf8 => DataType::Utf8,
             DType::Float32 => DataType::Float32,
+            DType::Float64 => DataType::Float64,
+            DType::Int64 => DataType::Int64,
         }
     }
 }
@@ -116,6 +118,26 @@ fn column<'a>(field: &Field, values: impl Iterator<Item = Option<&'a Value>>) ->
                 })
                 .collect::<Float32Array>(),
         ),
+        DType::Float64 => Arc::new(
+            values
+                .map(|value| {
+                    value.map(|value| match value {
+                        Value::Float64(v) => *v,
+                        other => panic!("column {}: expected float64, got {other:?}", field.name),
+                    })
+                })
+                .collect::<Float64Array>(),
+        ),
+        DType::Int64 => Arc::new(
+            values
+                .map(|value| {
+                    value.map(|value| match value {
+                        Value::Int64(v) => *v,
+                        other => panic!("column {}: expected int64, got {other:?}", field.name),
+                    })
+                })
+                .collect::<Int64Array>(),
+        ),
     }
 }
 
@@ -124,7 +146,7 @@ mod tests {
     use super::*;
     use crate::workload::Row;
     use arrow::array::{Array, AsArray};
-    use arrow::datatypes::Float32Type;
+    use arrow::datatypes::{Float32Type, Float64Type, Int64Type};
 
     fn schema() -> Arc<Schema> {
         Arc::new(Schema {
@@ -190,5 +212,37 @@ mod tests {
         assert_eq!(encoded.schema().field(0).name(), "key");
         let keys: Vec<&str> = encoded.column(0).as_string::<i32>().iter().flatten().collect();
         assert_eq!(keys, ["x", "y"]);
+    }
+
+    #[test]
+    fn wide_numeric_columns_keep_type_and_nulls() {
+        let field = |name: &str, dtype| Field {
+            name: name.to_string(),
+            dtype,
+            nullable: true,
+        };
+        let schema = Arc::new(Schema {
+            keys: schema().keys.clone(),
+            values: vec![field("f", DType::Float64), field("i", DType::Int64)],
+        });
+        let batch = RowBatch {
+            rows: vec![
+                Row {
+                    key: key("x"),
+                    values: vec![Some(Value::Float64(1.5)), None],
+                },
+                Row {
+                    key: key("y"),
+                    values: vec![None, Some(Value::Int64(7))],
+                },
+            ],
+        };
+
+        let encoded = ArrowBatch::new(schema).encode(&batch);
+
+        let f: Vec<Option<f64>> = encoded.column(1).as_primitive::<Float64Type>().iter().collect();
+        assert_eq!(f, [Some(1.5), None]);
+        let i: Vec<Option<i64>> = encoded.column(2).as_primitive::<Int64Type>().iter().collect();
+        assert_eq!(i, [None, Some(7)]);
     }
 }

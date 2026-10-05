@@ -5,6 +5,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::workload::Workload;
+use crate::workload::file::{FileConfig, FileWorkload};
 use crate::workload::synthetic::{SyntheticConfig, SyntheticWorkload};
 
 /// Per-backend configuration. Each backend defines its own config struct.
@@ -61,6 +62,7 @@ impl<B: BackendConfig> DbSuite<B> {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum WorkloadConfig {
     Synthetic(SyntheticConfig),
+    File(FileConfig),
 }
 
 impl WorkloadConfig {
@@ -72,6 +74,7 @@ impl WorkloadConfig {
     pub fn build(self) -> Box<dyn Workload> {
         match self {
             WorkloadConfig::Synthetic(config) => Box::new(SyntheticWorkload::new(config)),
+            WorkloadConfig::File(config) => Box::new(FileWorkload::new(config)),
         }
     }
 }
@@ -79,12 +82,16 @@ impl WorkloadConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::workload::DType;
 
     #[test]
     fn synthetic_workload_files_differ_only_in_row_count() {
         for (name, total_rows) in [("1m", 1_000_000), ("10m", 10_000_000), ("100m", 100_000_000)] {
             let WorkloadConfig::Synthetic(config) =
-                WorkloadConfig::from_file(format!("configs/workload/synthetic-{name}.yml"));
+                WorkloadConfig::from_file(format!("configs/workload/synthetic-{name}.yml"))
+            else {
+                panic!("synthetic-{name}.yml is not a synthetic workload");
+            };
 
             assert_eq!(config.total_rows, total_rows);
             assert_eq!(config.select_rows, 1000);
@@ -93,8 +100,36 @@ mod tests {
     }
 
     #[test]
+    fn file_workload_is_parsed_with_optional_nullability() {
+        let yaml = r#"
+type: file
+rows: /data/table
+requests: /data/requests.jsonl.gz
+schema:
+  keys:
+    - { name: "6", dtype: utf8 }
+  values:
+    - { name: "1228", dtype: float64 }
+    - { name: "1230", dtype: int64, nullable: false }
+"#;
+
+        let WorkloadConfig::File(config) = serde_yaml_ng::from_str(yaml).unwrap() else {
+            panic!("expected a file workload");
+        };
+
+        assert_eq!(config.rows, Path::new("/data/table"));
+        assert_eq!(config.requests, Path::new("/data/requests.jsonl.gz"));
+        assert_eq!(config.schema.keys[0].name, "6");
+        assert_eq!(config.schema.keys[0].dtype, DType::Utf8);
+        assert_eq!(config.schema.values[0].dtype, DType::Float64);
+        assert_eq!(config.schema.values[0].nullable, None);
+        assert_eq!(config.schema.values[1].dtype, DType::Int64);
+        assert_eq!(config.schema.values[1].nullable, Some(false));
+    }
+
+    #[test]
     fn unknown_workload_type_is_rejected() {
-        let result: Result<WorkloadConfig, _> = serde_yaml_ng::from_str("type: file\npath: /data");
+        let result: Result<WorkloadConfig, _> = serde_yaml_ng::from_str("type: kafka\ntopic: t");
 
         assert!(result.is_err());
     }

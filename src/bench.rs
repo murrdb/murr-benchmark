@@ -37,9 +37,14 @@ impl Bench {
         let workload = workload_config.build();
         let schema = workload.schema();
         let total_rows = workload.total_rows();
-        let keys_per_request = workload.keys_per_request();
+        // A fixed key count is measured per key; requests of varying size are measured per request.
+        let (benchmark_id, throughput) = match workload.keys_per_request() {
+            Some(keys) => (BenchmarkId::new("keys", keys), Throughput::Elements(keys as u64)),
+            None => (BenchmarkId::from_parameter("replay"), Throughput::Elements(1)),
+        };
         info!(
-            "[{group_name}] total_rows={total_rows}, keys_per_request={keys_per_request}, write_batch_size={}",
+            "[{group_name}] total_rows={total_rows}, keys_per_request={:?}, write_batch_size={}",
+            workload.keys_per_request(),
             suite.write_batch_size
         );
         info!(
@@ -125,30 +130,26 @@ impl Bench {
             group.sample_size(config.sample_size);
             group.measurement_time(Duration::from_secs(config.measurement_time_secs));
             group.warm_up_time(Duration::from_secs(config.warmup_time_secs));
-            group.throughput(Throughput::Elements(keys_per_request as u64));
+            group.throughput(throughput.clone());
 
             let read_count = Arc::new(AtomicU64::new(0));
             let mut requests = workload.requests();
 
-            group.bench_with_input(
-                BenchmarkId::new("keys", keys_per_request),
-                &keys_per_request,
-                |b, _| {
-                    b.to_async(rt).iter_batched(
-                        || requests.next().expect("workload ran out of requests"),
-                        |request| {
-                            let backend = backend.clone();
-                            let read_count = read_count.clone();
-                            async move {
-                                let resp = black_box(backend.read(&request).await);
-                                read_count.fetch_add(1, Ordering::Relaxed);
-                                resp
-                            }
-                        },
-                        BatchSize::SmallInput,
-                    )
-                },
-            );
+            group.bench_function(benchmark_id.clone(), |b| {
+                b.to_async(rt).iter_batched(
+                    || requests.next().expect("workload ran out of requests"),
+                    |request| {
+                        let backend = backend.clone();
+                        let read_count = read_count.clone();
+                        async move {
+                            let resp = black_box(backend.read(&request).await);
+                            read_count.fetch_add(1, Ordering::Relaxed);
+                            resp
+                        }
+                    },
+                    BatchSize::SmallInput,
+                )
+            });
             group.finish();
 
             let mem_bench = rt.block_on(backend.memory_usage());

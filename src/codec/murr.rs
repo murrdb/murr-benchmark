@@ -8,6 +8,8 @@ impl From<DType> for DTypeName {
         match dtype {
             DType::Utf8 => DTypeName::Utf8,
             DType::Float32 => DTypeName::Float32,
+            DType::Float64 => DTypeName::Float64,
+            DType::Int64 => DTypeName::Int64,
         }
     }
 }
@@ -67,5 +69,11 @@ mod tests {
         assert_eq!(value.dtype, DTypeName::Float32);
         assert!(!value.key);
         assert!(value.nullable);
+    }
+
+    #[test]
+    fn wide_numeric_types_map_to_murr_types() {
+        assert_eq!(DTypeName::from(DType::Float64), DTypeName::Float64);
+        assert_eq!(DTypeName::from(DType::Int64), DTypeName::Int64);
     }
 }

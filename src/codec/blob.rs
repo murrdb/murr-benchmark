@@ -11,6 +11,8 @@ impl ValueEncoder for LittleEndian {
         match value {
             Value::Utf8(s) => buf.extend_from_slice(s.as_bytes()),
             Value::Float32(v) => buf.extend_from_slice(&v.to_le_bytes()),
+            Value::Float64(v) => buf.extend_from_slice(&v.to_le_bytes()),
+            Value::Int64(v) => buf.extend_from_slice(&v.to_le_bytes()),
         }
     }
 }
@@ -132,6 +134,19 @@ mod tests {
         BlobRow::new(&schema).encode(&row, &mut buf);
 
         assert_eq!(buf, [3, 0, 0, 0, b'a', b'b', b'c']);
+    }
+
+    #[test]
+    fn wide_numbers_take_eight_bytes() {
+        let schema = schema(&[(DType::Float64, false), (DType::Int64, false)]);
+        let row = row(vec![Some(Value::Float64(1.5)), Some(Value::Int64(-7))]);
+        let mut buf = Vec::new();
+
+        BlobRow::new(&schema).encode(&row, &mut buf);
+
+        let mut expected = 1.5f64.to_le_bytes().to_vec();
+        expected.extend_from_slice(&(-7i64).to_le_bytes());
+        assert_eq!(buf, expected);
     }
 
     #[test]

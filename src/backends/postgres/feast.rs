@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use serde::Deserialize;
@@ -29,6 +30,13 @@ pub struct PgFeastConfig {
 
 impl BackendConfig for PgFeastConfig {}
 
+const KEY_COLUMN: &str = "key";
+
+/// Column names can be arbitrary (numeric feature IDs, for instance), so they are always quoted.
+fn quote_ident(name: &str) -> String {
+    format!("\"{}\"", name.replace('"', "\"\""))
+}
+
 #[derive(Clone)]
 pub struct PgFeast {
     pg: PgContainer,
@@ -52,19 +60,19 @@ impl Backend for PgFeast {
         )
         .await;
 
+        // The key is stored as one string column, whatever the number of key fields.
         let key = StringKey::new(&schema);
-        let key_name = &schema.keys[0].name;
 
         let col_defs: Vec<String> = schema
             .values
             .iter()
             .map(|f| {
                 let null = if f.nullable { "" } else { " NOT NULL" };
-                format!("{} {}{null}", f.name, Type::from(f.dtype).name())
+                format!("{} {}{null}", quote_ident(&f.name), Type::from(f.dtype).name())
             })
             .collect();
         let ddl = format!(
-            "CREATE TABLE bench ({key_name} TEXT PRIMARY KEY, {})",
+            "CREATE TABLE bench ({KEY_COLUMN} TEXT PRIMARY KEY, {})",
             col_defs.join(", ")
         );
         pg.client
@@ -72,21 +80,18 @@ impl Backend for PgFeast {
             .await
             .expect("failed to create table");
 
-        let col_names: Vec<&str> = schema.values.iter().map(|f| f.name.as_str()).collect();
+        let col_names: Vec<String> = schema.values.iter().map(|f| quote_ident(&f.name)).collect();
         let col_list = col_names.join(", ");
-        let read_sql = format!("SELECT {col_list} FROM bench WHERE {key_name} = ANY($1)");
+        let read_sql = format!("SELECT {col_list} FROM bench WHERE {KEY_COLUMN} = ANY($1)");
         let read_stmt = pg
             .client
             .prepare_typed(&read_sql, &[Type::TEXT_ARRAY])
             .await
             .expect("failed to prepare read statement");
 
-        let copy_sql = format!("COPY bench ({key_name}, {col_list}) FROM STDIN BINARY");
-        let copy_types: Vec<Type> = schema
-            .keys
-            .iter()
-            .chain(&schema.values)
-            .map(|f| f.dtype.into())
+        let copy_sql = format!("COPY bench ({KEY_COLUMN}, {col_list}) FROM STDIN BINARY");
+        let copy_types: Vec<Type> = std::iter::once(Type::TEXT)
+            .chain(schema.values.iter().map(|f| f.dtype.into()))
             .collect();
 
         PgFeast {
@@ -103,12 +108,10 @@ impl Backend for PgFeast {
         let writer = BinaryCopyInWriter::new(sink, &self.copy_types);
         tokio::pin!(writer);
 
-        let mut row_refs: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(self.copy_types.len());
         for row in &batch.rows {
-            row_refs.clear();
-            for value in &row.key.0 {
-                row_refs.push(value);
-            }
+            let key = self.key.encode(&row.key);
+            let mut row_refs: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(self.copy_types.len());
+            row_refs.push(&key);
             for value in &row.values {
                 row_refs.push(value);
             }
@@ -131,7 +134,7 @@ impl Backend for PgFeast {
     }
 
     async fn read(&self, request: &Request) -> Self::Response {
-        let keys: Vec<&str> = request.keys.iter().map(|k| self.key.encode(k)).collect();
+        let keys: Vec<Cow<str>> = request.keys.iter().map(|k| self.key.encode(k)).collect();
         self.pg
             .client
             .query(&*self.read_stmt, &[&keys])

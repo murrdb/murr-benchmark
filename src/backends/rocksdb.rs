@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -221,11 +222,8 @@ impl Backend for RocksDb {
     }
 
     async fn read(&self, request: &Request) -> Self::Response {
-        let keys: Vec<&[u8]> = request
-            .keys
-            .iter()
-            .map(|k| self.key.encode(k).as_bytes())
-            .collect();
+        let encoded: Vec<Cow<str>> = request.keys.iter().map(|k| self.key.encode(k)).collect();
+        let keys: Vec<&[u8]> = encoded.iter().map(|k| k.as_bytes()).collect();
         let n = keys.len();
         let cf = self.db.cf_handle("default").expect("default CF missing");
 
