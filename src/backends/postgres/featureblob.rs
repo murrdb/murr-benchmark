@@ -4,8 +4,12 @@ use serde::Deserialize;
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{ToSql, Type};
 
-use crate::backend::{Backend, Batch};
-use crate::config::{BackendConfig, BenchConfig};
+use crate::backend::Backend;
+use crate::codec::blob::BlobRow;
+use crate::codec::key::StringKey;
+use crate::codec::{KeyEncoder, RowEncoder};
+use crate::config::{BackendConfig, DbConfig};
+use crate::workload::{Request, RowBatch, Schema};
 
 use super::{
     PgContainer, default_effective_cache_size, default_shared_buffers, default_work_mem,
@@ -30,13 +34,15 @@ impl BackendConfig for PgFeatureBlobConfig {}
 pub struct PgFeatureBlob {
     pg: PgContainer,
     read_stmt: Arc<tokio_postgres::Statement>,
+    key: StringKey,
+    blob: BlobRow,
 }
 
 impl Backend for PgFeatureBlob {
     type Config = PgFeatureBlobConfig;
     type Response = Vec<tokio_postgres::Row>;
 
-    async fn init(config: &BenchConfig<Self::Config>) -> Self {
+    async fn init(config: &DbConfig<Self::Config>, schema: Arc<Schema>) -> Self {
         let pg = PgContainer::start(
             &config.backend.image,
             config.backend.cgroup_memory_mb,
@@ -63,14 +69,13 @@ impl Backend for PgFeatureBlob {
         PgFeatureBlob {
             pg,
             read_stmt: Arc::new(read_stmt),
+            key: StringKey::new(&schema),
+            blob: BlobRow::new(&schema),
         }
     }
 
-    async fn write_batch(&self, batch: &Batch) {
-        let value_cols = batch.value_columns();
-        let num_cols = value_cols.len();
-
-        let mut blob = Vec::with_capacity(num_cols * 4);
+    async fn write_batch(&self, batch: &RowBatch) {
+        let mut blob = Vec::new();
         let sink = self
             .pg
             .client
@@ -80,13 +85,12 @@ impl Backend for PgFeatureBlob {
         let writer = BinaryCopyInWriter::new(sink, &[Type::TEXT, Type::BYTEA]);
         tokio::pin!(writer);
 
-        for (row, key) in batch.keys.iter().enumerate() {
+        for row in &batch.rows {
             blob.clear();
-            for col in &value_cols {
-                blob.extend_from_slice(&col.value(row).to_le_bytes());
-            }
-            let row: [&(dyn ToSql + Sync); 2] = [key, &blob];
-            writer.as_mut().write(&row).await.unwrap();
+            self.blob.encode(row, &mut blob);
+            let key = self.key.encode(&row.key);
+            let fields: [&(dyn ToSql + Sync); 2] = [&key, &blob];
+            writer.as_mut().write(&fields).await.unwrap();
         }
         writer.finish().await.unwrap();
     }
@@ -104,7 +108,8 @@ impl Backend for PgFeatureBlob {
             .expect("checkpoint failed");
     }
 
-    async fn read(&self, keys: &[String], _columns: &[String]) -> Self::Response {
+    async fn read(&self, request: &Request) -> Self::Response {
+        let keys: Vec<&str> = request.keys.iter().map(|k| self.key.encode(k)).collect();
         self.pg
             .client
             .query(&*self.read_stmt, &[&keys])
@@ -132,15 +137,12 @@ impl Backend for PgFeatureBlob {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::BenchConfig;
+    use crate::config::DbConfig;
     use crate::testing::test_backend_roundtrip;
 
     #[tokio::test]
     async fn roundtrip() {
-        let config = BenchConfig {
-            total_rows: 100,
-            select_rows: 10,
-            select_cols: 2,
+        let config = DbConfig {
             write_batch_size: 50,
             measurement_time_secs: 1,
             warmup_time_secs: 1,

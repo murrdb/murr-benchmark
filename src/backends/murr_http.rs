@@ -8,10 +8,14 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers::{GenericImage, ImageExt};
 
 use murr::conf::{BackendConfig as StorageBackend, StorageConfig};
+use murr::core::TableSchema;
 
-use crate::backend::{Backend, Batch};
-use crate::config::{BackendConfig, BenchConfig};
-use crate::testdata;
+use crate::backend::Backend;
+use crate::codec::arrow::ArrowBatch;
+use crate::codec::json::JsonKeys;
+use crate::codec::{BatchEncoder, KeySetEncoder};
+use crate::config::{BackendConfig, DbConfig};
+use crate::workload::{Request, RowBatch, Schema};
 
 const MURR_PORT: u16 = 8080;
 const CONTAINER_DATA_DIR: &str = "/tmp/murr-bench";
@@ -38,6 +42,8 @@ pub struct MurrHttp {
     client: reqwest::Client,
     base_url: String,
     _container: Arc<ContainerAsync<GenericImage>>,
+    rows: ArrowBatch,
+    keys: JsonKeys,
 }
 
 impl MurrHttp {
@@ -47,27 +53,13 @@ impl MurrHttp {
             None => (image.to_string(), "latest".to_string()),
         }
     }
-
-    fn build_schema_body(num_cols: usize) -> serde_json::Value {
-        let mut columns = serde_json::Map::new();
-        columns.insert(
-            "key".to_string(),
-            json!({"dtype": "utf8", "nullable": false, "key": true}),
-        );
-        for name in testdata::column_names(num_cols) {
-            columns.insert(name, json!({"dtype": "float32", "nullable": false}));
-        }
-        json!({
-            "columns": columns,
-        })
-    }
 }
 
 impl Backend for MurrHttp {
     type Config = MurrHttpConfig;
     type Response = bytes::Bytes;
 
-    async fn init(config: &BenchConfig<Self::Config>) -> Self {
+    async fn init(config: &DbConfig<Self::Config>, schema: Arc<Schema>) -> Self {
         let (image_name, image_tag) = Self::parse_image(&config.backend.image);
 
         let server_yaml = serde_yaml_ng::to_string(&MurrServerYaml {
@@ -107,10 +99,9 @@ impl Backend for MurrHttp {
         }
 
         // Create table
-        let schema_body = Self::build_schema_body(config.select_cols);
         let resp = client
             .put(format!("{base_url}/api/v1/table/bench"))
-            .json(&schema_body)
+            .json(&TableSchema::from(schema.as_ref()))
             .send()
             .await
             .expect("failed to create table");
@@ -124,16 +115,19 @@ impl Backend for MurrHttp {
             client,
             base_url,
             _container: Arc::new(container),
+            rows: ArrowBatch::new(schema.clone()),
+            keys: JsonKeys::new(schema),
         }
     }
 
-    async fn write_batch(&self, batch: &Batch) {
+    async fn write_batch(&self, batch: &RowBatch) {
+        let record_batch = self.rows.encode(batch);
         let mut buf = Vec::new();
         {
             let mut writer =
-                arrow::ipc::writer::StreamWriter::try_new(&mut buf, batch.inner.schema().as_ref())
+                arrow::ipc::writer::StreamWriter::try_new(&mut buf, record_batch.schema().as_ref())
                     .expect("failed to create IPC writer");
-            writer.write(&batch.inner).expect("failed to write batch");
+            writer.write(&record_batch).expect("failed to write batch");
             writer.finish().expect("failed to finish IPC stream");
         }
 
@@ -152,10 +146,10 @@ impl Backend for MurrHttp {
         );
     }
 
-    async fn read(&self, keys: &[String], columns: &[String]) -> Self::Response {
+    async fn read(&self, request: &Request) -> Self::Response {
         let body = json!({
-            "keys": {"key": keys},
-            "columns": columns,
+            "keys": self.keys.encode(&request.keys),
+            "columns": request.columns,
         });
         let resp = self
             .client
@@ -202,16 +196,13 @@ impl Backend for MurrHttp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::BenchConfig;
+    use crate::config::DbConfig;
     use crate::testing::test_backend_roundtrip;
     use murr::io::store::rocksdb::block::BlockConfig;
     use murr::io::store::rocksdb::plain::PlainConfig;
 
-    fn base_config(storage: StorageBackend) -> BenchConfig<MurrHttpConfig> {
-        BenchConfig {
-            total_rows: 100,
-            select_rows: 10,
-            select_cols: 2,
+    fn base_config(storage: StorageBackend) -> DbConfig<MurrHttpConfig> {
+        DbConfig {
             write_batch_size: 50,
             measurement_time_secs: 1,
             warmup_time_secs: 1,

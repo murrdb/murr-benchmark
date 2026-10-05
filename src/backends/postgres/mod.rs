@@ -7,11 +7,42 @@ use testcontainers::GenericImage;
 use testcontainers::ImageExt;
 use testcontainers::core::ContainerAsync;
 use testcontainers::runners::AsyncRunner;
+use bytes::BytesMut;
 use tokio_postgres::NoTls;
+use tokio_postgres::types::{IsNull, ToSql, Type, to_sql_checked};
 
 use crate::stats::disk::DiskUsage;
+use crate::workload::{DType, Value};
 
 const PG_PORT: u16 = 5432;
+
+impl From<DType> for Type {
+    fn from(dtype: DType) -> Self {
+        match dtype {
+            DType::Utf8 => Type::TEXT,
+            DType::Float32 => Type::FLOAT4,
+        }
+    }
+}
+
+impl ToSql for Value {
+    fn to_sql(
+        &self,
+        ty: &Type,
+        out: &mut BytesMut,
+    ) -> Result<IsNull, Box<dyn std::error::Error + Sync + Send>> {
+        match self {
+            Value::Utf8(s) => s.to_sql(ty, out),
+            Value::Float32(v) => v.to_sql(ty, out),
+        }
+    }
+
+    fn accepts(ty: &Type) -> bool {
+        <String as ToSql>::accepts(ty) || <f32 as ToSql>::accepts(ty)
+    }
+
+    to_sql_checked!();
+}
 
 pub fn default_shared_buffers() -> String {
     "128MB".to_string()

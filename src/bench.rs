@@ -3,13 +3,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use arrow::array::AsArray;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use log::info;
 use tokio::runtime::Runtime;
 
-use crate::backend::{Backend, Batch};
-use crate::testdata;
+use crate::backend::Backend;
+use crate::config::{DbSuite, WorkloadConfig};
+use crate::workload::{Row, RowBatch};
+
+/// Env var naming the workload YAML; the db config path is fixed per bench target.
+const WORKLOAD_ENV: &str = "WORKLOAD";
+const DEFAULT_WORKLOAD: &str = "configs/workload/synthetic-1m.yml";
 
 pub struct Bench;
 
@@ -23,12 +27,20 @@ impl Bench {
         let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
             .try_init();
 
-        let suite = crate::config::BenchSuite::<B::Config>::from_file(config_path);
+        let suite = DbSuite::<B::Config>::from_file(config_path);
+        let workload_path =
+            std::env::var(WORKLOAD_ENV).unwrap_or_else(|_| DEFAULT_WORKLOAD.to_string());
+        let workload_config = WorkloadConfig::from_file(&workload_path);
 
         info!("[{group_name}] config: {config_path}");
+        info!("[{group_name}] workload: {workload_path} {workload_config:?}");
+        let workload = workload_config.build();
+        let schema = workload.schema();
+        let total_rows = workload.total_rows();
+        let keys_per_request = workload.keys_per_request();
         info!(
-            "[{group_name}] total_rows={}, select_rows={}, select_cols={}, write_batch_size={}",
-            suite.total_rows, suite.select_rows, suite.select_cols, suite.write_batch_size
+            "[{group_name}] total_rows={total_rows}, keys_per_request={keys_per_request}, write_batch_size={}",
+            suite.write_batch_size
         );
         info!(
             "[{group_name}] measurement={}s, warmup={}s, samples={}",
@@ -54,7 +66,7 @@ impl Bench {
             let _rt_guard = rt.enter();
 
             info!("[{label}] initializing backend...");
-            let backend = rt.block_on(B::init(&config));
+            let backend = rt.block_on(B::init(&config, schema.clone()));
             info!("[{label}] backend ready");
 
             let mem_before = rt.block_on(backend.memory_usage());
@@ -64,43 +76,32 @@ impl Bench {
             let net_before = rt.block_on(backend.network_usage());
             info!("[{label}] net before load:    {:?}", net_before);
 
-            let columns = testdata::column_names(config.select_cols);
-            let schema = testdata::make_schema(config.select_cols);
-            let num_batches = config.total_rows.div_ceil(config.write_batch_size);
-            info!(
-                "[{label}] writing {} rows in {num_batches} batches...",
-                config.total_rows
-            );
+            let num_batches = total_rows.div_ceil(config.write_batch_size);
+            info!("[{label}] writing {total_rows} rows in {num_batches} batches...");
 
             let ingest_start = Instant::now();
             let mut last_log = Instant::now();
-            for (i, record_batch) in
-                testdata::generate_batches(&schema, config.total_rows, config.write_batch_size)
-                    .enumerate()
-            {
-                let keys: Vec<String> = record_batch
-                    .column(0)
-                    .as_string::<i32>()
-                    .iter()
-                    .map(|v| v.unwrap().to_string())
-                    .collect();
-                let batch = Batch {
-                    inner: record_batch,
-                    keys,
-                    columns: columns.clone(),
-                };
-                rt.block_on(backend.write_batch(&batch));
-                if i + 1 == num_batches || last_log.elapsed() >= Duration::from_secs(5) {
-                    info!("[{label}] wrote batch {}/{num_batches}", i + 1);
+            let mut rows = workload.rows();
+            let mut written = 0;
+            loop {
+                let chunk: Vec<Row> = rows.by_ref().take(config.write_batch_size).collect();
+                if chunk.is_empty() {
+                    break;
+                }
+                rt.block_on(backend.write_batch(&RowBatch { rows: chunk }));
+                written += 1;
+                if written == num_batches || last_log.elapsed() >= Duration::from_secs(5) {
+                    info!("[{label}] wrote batch {written}/{num_batches}");
                     last_log = Instant::now();
                 }
             }
+            drop(rows);
 
             let ingest_elapsed = ingest_start.elapsed();
             info!(
                 "[{label}] ingest total: {:.2?} ({:.0} rows/s)",
                 ingest_elapsed,
-                config.total_rows as f64 / ingest_elapsed.as_secs_f64()
+                total_rows as f64 / ingest_elapsed.as_secs_f64()
             );
 
             info!("[{label}] flushing...");
@@ -118,31 +119,28 @@ impl Bench {
             info!("[{label}] net after load:     {:?}", net_after);
             info!("[{label}] net delta:          {:?}", net_before.diff(&net_after));
 
-            let total_rows = config.total_rows;
-            let select_rows = config.select_rows;
-
             info!("[{label}] starting benchmark...");
 
             let mut group = c.benchmark_group(format!("{}/rows_{}", label, total_rows));
             group.sample_size(config.sample_size);
             group.measurement_time(Duration::from_secs(config.measurement_time_secs));
             group.warm_up_time(Duration::from_secs(config.warmup_time_secs));
-            group.throughput(Throughput::Elements(select_rows as u64));
+            group.throughput(Throughput::Elements(keys_per_request as u64));
 
             let read_count = Arc::new(AtomicU64::new(0));
+            let mut requests = workload.requests();
 
             group.bench_with_input(
-                BenchmarkId::new("keys", select_rows),
-                &select_rows,
+                BenchmarkId::new("keys", keys_per_request),
+                &keys_per_request,
                 |b, _| {
                     b.to_async(rt).iter_batched(
-                        || testdata::generate_random_keys(select_rows, total_rows),
-                        |keys| {
+                        || requests.next().expect("workload ran out of requests"),
+                        |request| {
                             let backend = backend.clone();
-                            let columns = columns.clone();
                             let read_count = read_count.clone();
                             async move {
-                                let resp = black_box(backend.read(&keys, &columns).await);
+                                let resp = black_box(backend.read(&request).await);
                                 read_count.fetch_add(1, Ordering::Relaxed);
                                 resp
                             }

@@ -7,7 +7,7 @@ fn bench_valkey_featureblob(c: &mut criterion::Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    Bench::run::<RedisFeatureBlob>(c, "configs/valkey_featureblob.yaml", "valkey_featureblob", &rt);
+    Bench::run::<RedisFeatureBlob>(c, "configs/db/valkey_featureblob.yaml", "valkey_featureblob", &rt);
 }
 
 criterion_group!(benches, bench_valkey_featureblob);

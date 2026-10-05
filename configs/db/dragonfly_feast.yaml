@@ -1,6 +1,3 @@
-total_rows: 100000000
-select_rows: 1000
-select_cols: 10
 write_batch_size: 100000
 measurement_time_secs: 30
 warmup_time_secs: 2
@@ -10,4 +7,5 @@ backend:
     image: "docker.dragonflydb.io/dragonflydb/dragonfly:v2.0.0"
     command: ["dragonfly", "--logtostderr", "--max_multi_bulk_len=1000000"]
     wait_log: "AcceptServer - listening on"
+    read_mode: hgetall
     # cgroup_memory_mb: 4096            # cap container RAM; omit = unlimited

@@ -1,31 +1,25 @@
-use arrow::array::AsArray;
-
-use crate::backend::{Backend, Batch};
-use crate::config::BenchConfig;
-use crate::testdata;
+use crate::backend::Backend;
+use crate::config::DbConfig;
+use crate::workload::synthetic::{SyntheticConfig, SyntheticWorkload};
+use crate::workload::{Key, Request, Row, RowBatch, Value, Workload};
 
 /// Shared integration test: init → write → flush → read → cleanup.
 ///
 /// Verifies the full backend lifecycle completes without panicking.
-/// Uses small parameters for fast execution.
-pub async fn test_backend_roundtrip<B: Backend>(config: BenchConfig<B::Config>) {
-    let backend = B::init(&config).await;
+/// Uses a small synthetic workload for fast execution.
+pub async fn test_backend_roundtrip<B: Backend>(config: DbConfig<B::Config>) {
+    let workload = SyntheticWorkload::new(SyntheticConfig {
+        total_rows: 100,
+        select_rows: 10,
+        select_cols: 2,
+    });
+    let schema = workload.schema();
+    let backend = B::init(&config, schema.clone()).await;
 
-    let columns = testdata::column_names(config.select_cols);
-    let schema = testdata::make_schema(config.select_cols);
-    for record_batch in
-        testdata::generate_batches(&schema, config.total_rows, config.write_batch_size)
-    {
-        let keys: Vec<String> = record_batch
-            .column(0)
-            .as_string::<i32>()
-            .iter()
-            .map(|v| v.unwrap().to_string())
-            .collect();
-        let batch = Batch {
-            inner: record_batch,
-            keys,
-            columns: columns.clone(),
+    let rows: Vec<Row> = workload.rows().collect();
+    for chunk in rows.chunks(config.write_batch_size) {
+        let batch = RowBatch {
+            rows: chunk.to_vec(),
         };
         backend.write_batch(&batch).await;
     }
@@ -36,8 +30,13 @@ pub async fn test_backend_roundtrip<B: Backend>(config: BenchConfig<B::Config>) 
     assert!(mem.total_bytes > 0, "expected non-zero TOTAL");
 
     // Read back known keys (first select_rows keys: "0", "1", ...)
-    let keys: Vec<String> = (0..config.select_rows).map(|i| i.to_string()).collect();
-    let _response = backend.read(&keys, &columns).await;
+    let request = Request {
+        keys: (0..workload.keys_per_request())
+            .map(|i| Key(vec![Value::Utf8(i.to_string())]))
+            .collect(),
+        columns: schema.values.iter().map(|f| f.name.clone()).collect(),
+    };
+    let _response = backend.read(&request).await;
 
     backend.cleanup().await;
 }

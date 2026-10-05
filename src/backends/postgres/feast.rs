@@ -4,8 +4,11 @@ use serde::Deserialize;
 use tokio_postgres::binary_copy::BinaryCopyInWriter;
 use tokio_postgres::types::{ToSql, Type};
 
-use crate::backend::{Backend, Batch};
-use crate::config::{BackendConfig, BenchConfig};
+use crate::backend::Backend;
+use crate::codec::KeyEncoder;
+use crate::codec::key::StringKey;
+use crate::config::{BackendConfig, DbConfig};
+use crate::workload::{Request, RowBatch, Schema};
 
 use super::{
     PgContainer, default_effective_cache_size, default_shared_buffers, default_work_mem,
@@ -30,13 +33,16 @@ impl BackendConfig for PgFeastConfig {}
 pub struct PgFeast {
     pg: PgContainer,
     read_stmt: Arc<tokio_postgres::Statement>,
+    copy_sql: Arc<str>,
+    copy_types: Arc<[Type]>,
+    key: StringKey,
 }
 
 impl Backend for PgFeast {
     type Config = PgFeastConfig;
     type Response = Vec<tokio_postgres::Row>;
 
-    async fn init(config: &BenchConfig<Self::Config>) -> Self {
+    async fn init(config: &DbConfig<Self::Config>, schema: Arc<Schema>) -> Self {
         let pg = PgContainer::start(
             &config.backend.image,
             config.backend.cgroup_memory_mb,
@@ -46,11 +52,19 @@ impl Backend for PgFeast {
         )
         .await;
 
-        let col_defs: Vec<String> = (0..config.select_cols)
-            .map(|i| format!("col_{i} REAL NOT NULL"))
+        let key = StringKey::new(&schema);
+        let key_name = &schema.keys[0].name;
+
+        let col_defs: Vec<String> = schema
+            .values
+            .iter()
+            .map(|f| {
+                let null = if f.nullable { "" } else { " NOT NULL" };
+                format!("{} {}{null}", f.name, Type::from(f.dtype).name())
+            })
             .collect();
         let ddl = format!(
-            "CREATE TABLE bench (key TEXT PRIMARY KEY, {})",
+            "CREATE TABLE bench ({key_name} TEXT PRIMARY KEY, {})",
             col_defs.join(", ")
         );
         pg.client
@@ -58,56 +72,45 @@ impl Backend for PgFeast {
             .await
             .expect("failed to create table");
 
-        let col_list: String = (0..config.select_cols)
-            .map(|i| format!("col_{i}"))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let read_sql = format!("SELECT {col_list} FROM bench WHERE key = ANY($1)");
+        let col_names: Vec<&str> = schema.values.iter().map(|f| f.name.as_str()).collect();
+        let col_list = col_names.join(", ");
+        let read_sql = format!("SELECT {col_list} FROM bench WHERE {key_name} = ANY($1)");
         let read_stmt = pg
             .client
             .prepare_typed(&read_sql, &[Type::TEXT_ARRAY])
             .await
             .expect("failed to prepare read statement");
 
+        let copy_sql = format!("COPY bench ({key_name}, {col_list}) FROM STDIN BINARY");
+        let copy_types: Vec<Type> = schema
+            .keys
+            .iter()
+            .chain(&schema.values)
+            .map(|f| f.dtype.into())
+            .collect();
+
         PgFeast {
             pg,
             read_stmt: Arc::new(read_stmt),
+            copy_sql: copy_sql.into(),
+            copy_types: copy_types.into(),
+            key,
         }
     }
 
-    async fn write_batch(&self, batch: &Batch) {
-        let value_cols = batch.value_columns();
-        let num_cols = value_cols.len();
-        let num_rows = batch.keys.len();
-
-        // Flatten f32 values so we can take stable references into the BinaryCopyInWriter.
-        let mut float_values: Vec<f32> = Vec::with_capacity(num_rows * num_cols);
-        for row in 0..num_rows {
-            for col in &value_cols {
-                float_values.push(col.value(row));
-            }
-        }
-
-        let col_names: Vec<String> = (0..num_cols).map(|i| format!("col_{i}")).collect();
-        let mut types: Vec<Type> = Vec::with_capacity(1 + num_cols);
-        types.push(Type::TEXT);
-        types.extend(std::iter::repeat_n(Type::FLOAT4, num_cols));
-
-        let sql = format!(
-            "COPY bench (key, {}) FROM STDIN BINARY",
-            col_names.join(", ")
-        );
-        let sink = self.pg.client.copy_in(&sql).await.unwrap();
-        let writer = BinaryCopyInWriter::new(sink, &types);
+    async fn write_batch(&self, batch: &RowBatch) {
+        let sink = self.pg.client.copy_in(&*self.copy_sql).await.unwrap();
+        let writer = BinaryCopyInWriter::new(sink, &self.copy_types);
         tokio::pin!(writer);
 
-        let mut row_refs: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(1 + num_cols);
-        for (row, key) in batch.keys.iter().enumerate() {
+        let mut row_refs: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(self.copy_types.len());
+        for row in &batch.rows {
             row_refs.clear();
-            row_refs.push(key);
-            let float_offset = row * num_cols;
-            for i in 0..num_cols {
-                row_refs.push(&float_values[float_offset + i]);
+            for value in &row.key.0 {
+                row_refs.push(value);
+            }
+            for value in &row.values {
+                row_refs.push(value);
             }
             writer.as_mut().write(&row_refs).await.unwrap();
         }
@@ -127,7 +130,8 @@ impl Backend for PgFeast {
             .expect("checkpoint failed");
     }
 
-    async fn read(&self, keys: &[String], _columns: &[String]) -> Self::Response {
+    async fn read(&self, request: &Request) -> Self::Response {
+        let keys: Vec<&str> = request.keys.iter().map(|k| self.key.encode(k)).collect();
         self.pg
             .client
             .query(&*self.read_stmt, &[&keys])
@@ -155,15 +159,12 @@ impl Backend for PgFeast {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::BenchConfig;
+    use crate::config::DbConfig;
     use crate::testing::test_backend_roundtrip;
 
     #[tokio::test]
     async fn roundtrip() {
-        let config = BenchConfig {
-            total_rows: 100,
-            select_rows: 10,
-            select_cols: 2,
+        let config = DbConfig {
             write_batch_size: 50,
             measurement_time_secs: 1,
             warmup_time_secs: 1,

@@ -7,7 +7,7 @@ fn bench_rocksdb(c: &mut criterion::Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    Bench::run::<RocksDb>(c, "configs/rocksdb.yaml", "rocksdb", &rt);
+    Bench::run::<RocksDb>(c, "configs/db/rocksdb.yaml", "rocksdb", &rt);
 }
 
 criterion_group!(benches, bench_rocksdb);

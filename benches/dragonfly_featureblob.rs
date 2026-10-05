@@ -7,7 +7,7 @@ fn bench_dragonfly_featureblob(c: &mut criterion::Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    Bench::run::<RedisFeatureBlob>(c, "configs/dragonfly_featureblob.yaml", "dragonfly_featureblob", &rt);
+    Bench::run::<RedisFeatureBlob>(c, "configs/db/dragonfly_featureblob.yaml", "dragonfly_featureblob", &rt);
 }
 
 criterion_group!(benches, bench_dragonfly_featureblob);

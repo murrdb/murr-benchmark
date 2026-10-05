@@ -11,7 +11,7 @@ fn bench_murr_embed(c: &mut criterion::Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    Bench::run::<MurrEmbed>(c, "configs/murr_embed.yaml", "murr_embed", &rt);
+    Bench::run::<MurrEmbed>(c, "configs/db/murr_embed.yaml", "murr_embed", &rt);
 }
 
 criterion_group!(benches, bench_murr_embed);

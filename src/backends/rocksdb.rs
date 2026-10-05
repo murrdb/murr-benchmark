@@ -3,8 +3,12 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 
-use crate::backend::{Backend, Batch};
-use crate::config::{BackendConfig, BenchConfig};
+use crate::backend::Backend;
+use crate::codec::blob::BlobRow;
+use crate::codec::key::StringKey;
+use crate::codec::{KeyEncoder, RowEncoder};
+use crate::config::{BackendConfig, DbConfig};
+use crate::workload::{Request, RowBatch, Schema};
 
 #[derive(Debug, Clone, Copy, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -97,13 +101,15 @@ pub struct RocksDb {
     verify_checksums: bool,
     batched_multi_get: bool,
     sorted_input: bool,
+    key: StringKey,
+    blob: BlobRow,
 }
 
 impl Backend for RocksDb {
     type Config = RocksDbConfig;
     type Response = Vec<Option<Vec<u8>>>;
 
-    async fn init(config: &BenchConfig<Self::Config>) -> Self {
+    async fn init(config: &DbConfig<Self::Config>, schema: Arc<Schema>) -> Self {
         let cfg = &config.backend;
         let data_dir = &cfg.data_dir;
         match std::fs::read_dir(data_dir) {
@@ -191,19 +197,19 @@ impl Backend for RocksDb {
             verify_checksums: cfg.verify_checksums,
             batched_multi_get: cfg.batched_multi_get,
             sorted_input: cfg.sorted_input,
+            key: StringKey::new(&schema),
+            blob: BlobRow::new(&schema),
         }
     }
 
-    async fn write_batch(&self, batch: &Batch) {
-        let value_cols = batch.value_columns();
+    async fn write_batch(&self, batch: &RowBatch) {
         let mut wb = rocksdb::WriteBatch::default();
 
-        for (row, key) in batch.keys.iter().enumerate() {
-            let mut blob = Vec::with_capacity(value_cols.len() * 4);
-            for col in &value_cols {
-                blob.extend_from_slice(&col.value(row).to_le_bytes());
-            }
-            wb.put(key.as_bytes(), &blob);
+        let mut blob = Vec::new();
+        for row in &batch.rows {
+            blob.clear();
+            self.blob.encode(row, &mut blob);
+            wb.put(self.key.encode(&row.key).as_bytes(), &blob);
         }
 
         self.db.write(wb).expect("failed to write batch");
@@ -214,7 +220,12 @@ impl Backend for RocksDb {
         self.db.compact_range::<&[u8], &[u8]>(None, None);
     }
 
-    async fn read(&self, keys: &[String], _columns: &[String]) -> Self::Response {
+    async fn read(&self, request: &Request) -> Self::Response {
+        let keys: Vec<&[u8]> = request
+            .keys
+            .iter()
+            .map(|k| self.key.encode(k).as_bytes())
+            .collect();
         let n = keys.len();
         let cf = self.db.cf_handle("default").expect("default CF missing");
 
@@ -226,8 +237,8 @@ impl Backend for RocksDb {
             if self.sorted_input {
                 // Pre-sort keys so RocksDB can skip its internal sort, then permute results back.
                 let mut order: Vec<usize> = (0..n).collect();
-                order.sort_unstable_by(|&a, &b| keys[a].as_bytes().cmp(keys[b].as_bytes()));
-                let sorted_keys: Vec<&[u8]> = order.iter().map(|&i| keys[i].as_bytes()).collect();
+                order.sort_unstable_by(|&a, &b| keys[a].cmp(keys[b]));
+                let sorted_keys: Vec<&[u8]> = order.iter().map(|&i| keys[i]).collect();
 
                 let results = self.db.batched_multi_get_cf_opt(&cf, sorted_keys, true, &ropts);
 
@@ -238,8 +249,7 @@ impl Backend for RocksDb {
                 }
                 output
             } else {
-                let key_refs: Vec<&[u8]> = keys.iter().map(|k| k.as_bytes()).collect();
-                let results = self.db.batched_multi_get_cf_opt(&cf, key_refs, false, &ropts);
+                let results = self.db.batched_multi_get_cf_opt(&cf, keys, false, &ropts);
                 results
                     .into_iter()
                     .map(|r| r.expect("rocksdb read error").map(|s| s.to_vec()))
@@ -247,7 +257,7 @@ impl Backend for RocksDb {
             }
         } else {
             let pairs: Vec<(&rocksdb::ColumnFamily, &[u8])> =
-                keys.iter().map(|k| (&*cf, k.as_bytes())).collect();
+                keys.iter().map(|&k| (&*cf, k)).collect();
             let results = self.db.multi_get_cf_opt(pairs, &ropts);
             results
                 .into_iter()
@@ -297,15 +307,12 @@ impl Backend for RocksDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::BenchConfig;
+    use crate::config::DbConfig;
     use crate::testing::test_backend_roundtrip;
     use tempfile::TempDir;
 
-    fn base_config(dir: &TempDir) -> BenchConfig<RocksDbConfig> {
-        BenchConfig {
-            total_rows: 100,
-            select_rows: 10,
-            select_cols: 2,
+    fn base_config(dir: &TempDir) -> DbConfig<RocksDbConfig> {
+        DbConfig {
             write_batch_size: 50,
             measurement_time_secs: 1,
             warmup_time_secs: 1,
