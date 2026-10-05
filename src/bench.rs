@@ -1,4 +1,5 @@
 use std::hint::black_box;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -9,6 +10,11 @@ use tokio::runtime::Runtime;
 
 use crate::backend::Backend;
 use crate::config::{DbSuite, WorkloadConfig};
+use crate::report::{
+    self, DbReport, DiskReport, IngestReport, MemoryReport, NetworkReport, ReadReport, Report,
+    WorkloadReport,
+};
+use crate::stats::latency::LatencyRecorder;
 use crate::workload::{Row, RowBatch};
 
 /// Env var naming the workload YAML; the db config path is fixed per bench target.
@@ -31,6 +37,19 @@ impl Bench {
         let workload_path =
             std::env::var(WORKLOAD_ENV).unwrap_or_else(|_| DEFAULT_WORKLOAD.to_string());
         let workload_config = WorkloadConfig::from_file(&workload_path);
+
+        let timestamp = Report::now();
+        let report_dir = PathBuf::from(
+            std::env::var(report::REPORT_DIR_ENV)
+                .unwrap_or_else(|_| report::DEFAULT_REPORT_DIR.to_string()),
+        );
+        let db_yaml = report::read_yaml(config_path);
+        let workload_yaml = report::read_yaml(&workload_path);
+        let workload_name = Path::new(&workload_path)
+            .file_stem()
+            .expect("workload path has no file name")
+            .to_string_lossy()
+            .into_owned();
 
         info!("[{group_name}] config: {config_path}");
         info!("[{group_name}] workload: {workload_path} {workload_config:?}");
@@ -112,17 +131,21 @@ impl Bench {
             info!("[{label}] flushing...");
             let flush_start = Instant::now();
             rt.block_on(backend.flush());
-            info!("[{label}] flush total: {:.2?}", flush_start.elapsed());
+            let flush_elapsed = flush_start.elapsed();
+            info!("[{label}] flush total: {:.2?}", flush_elapsed);
 
             let mem_after = rt.block_on(backend.memory_usage());
+            let mem_delta_load = mem_before.diff(&mem_after);
             info!("[{label}] memory after load:  {:?}", mem_after);
-            info!("[{label}] memory delta:       {:?}", mem_before.diff(&mem_after));
+            info!("[{label}] memory delta:       {:?}", mem_delta_load);
             let disk_after = rt.block_on(backend.disk_usage());
+            let disk_delta_load = disk_before.diff(&disk_after);
             info!("[{label}] disk after load:    {:?}", disk_after);
-            info!("[{label}] disk delta:         {:?}", disk_before.diff(&disk_after));
+            info!("[{label}] disk delta:         {:?}", disk_delta_load);
             let net_after = rt.block_on(backend.network_usage());
+            let net_delta_load = net_before.diff(&net_after);
             info!("[{label}] net after load:     {:?}", net_after);
-            info!("[{label}] net delta:          {:?}", net_before.diff(&net_after));
+            info!("[{label}] net delta:          {:?}", net_delta_load);
 
             info!("[{label}] starting benchmark...");
 
@@ -133,6 +156,9 @@ impl Bench {
             group.throughput(throughput.clone());
 
             let read_count = Arc::new(AtomicU64::new(0));
+            let latency = Arc::new(LatencyRecorder::new(Duration::from_secs(
+                config.warmup_time_secs,
+            )));
             let mut requests = workload.requests();
 
             group.bench_function(benchmark_id.clone(), |b| {
@@ -141,8 +167,11 @@ impl Bench {
                     |request| {
                         let backend = backend.clone();
                         let read_count = read_count.clone();
+                        let latency = latency.clone();
                         async move {
+                            let start = Instant::now();
                             let resp = black_box(backend.read(&request).await);
+                            latency.record(start, start.elapsed());
                             read_count.fetch_add(1, Ordering::Relaxed);
                             resp
                         }
@@ -153,8 +182,9 @@ impl Bench {
             group.finish();
 
             let mem_bench = rt.block_on(backend.memory_usage());
+            let mem_delta_bench = mem_after.diff(&mem_bench);
             info!("[{label}] memory after bench: {:?}", mem_bench);
-            info!("[{label}] memory delta (bench): {:?}", mem_after.diff(&mem_bench));
+            info!("[{label}] memory delta (bench): {:?}", mem_delta_bench);
             let net_bench = rt.block_on(backend.network_usage());
             let net_delta_bench = net_after.diff(&net_bench);
             info!("[{label}] net after bench:    {:?}", net_bench);
@@ -162,14 +192,87 @@ impl Bench {
 
             let reads = read_count.load(Ordering::Relaxed);
             info!("[{label}] reads:              {reads} calls");
-            if reads > 0 {
-                let rx_per_call = net_delta_bench.rx_bytes as f64 / reads as f64;
-                let tx_per_call = net_delta_bench.tx_bytes as f64 / reads as f64;
+            let net_per_call = (reads > 0).then(|| {
+                (
+                    net_delta_bench.rx_bytes as f64 / reads as f64,
+                    net_delta_bench.tx_bytes as f64 / reads as f64,
+                )
+            });
+            if let Some((rx_per_call, tx_per_call)) = net_per_call {
                 info!(
                     "[{label}] net per read:       RX={:.1} bytes/call, TX={:.1} bytes/call",
                     rx_per_call, tx_per_call
                 );
             }
+            let latency_stats = latency.stats();
+            if let Some(stats) = &latency_stats {
+                info!(
+                    "[{label}] read latency:       p50={:.2?}, p99={:.2?}, max={:.2?} ({} calls after warmup)",
+                    Duration::from_nanos(stats.p50),
+                    Duration::from_nanos(stats.p99),
+                    Duration::from_nanos(stats.max),
+                    latency.len()
+                );
+            }
+
+            let report = Report {
+                version: Report::VERSION,
+                timestamp: timestamp.clone(),
+                bench: group_name.to_string(),
+                variant: variant_name.clone(),
+                db: DbReport {
+                    config_path: config_path.to_string(),
+                    write_batch_size: config.write_batch_size,
+                    measurement_time_secs: config.measurement_time_secs,
+                    warmup_time_secs: config.warmup_time_secs,
+                    sample_size: config.sample_size,
+                    backend: db_yaml["backend"][&variant_name].clone(),
+                },
+                workload: WorkloadReport {
+                    config_path: workload_path.clone(),
+                    name: workload_name.clone(),
+                    config: workload_yaml.clone(),
+                    total_rows,
+                    keys_per_request: workload.keys_per_request(),
+                    key_columns: schema.keys.len(),
+                    value_columns: schema.values.len(),
+                },
+                ingest: IngestReport {
+                    rows: total_rows,
+                    batches: written,
+                    elapsed_secs: ingest_elapsed.as_secs_f64(),
+                    rows_per_sec: total_rows as f64 / ingest_elapsed.as_secs_f64(),
+                    flush_secs: flush_elapsed.as_secs_f64(),
+                },
+                memory: MemoryReport {
+                    before_load: mem_before,
+                    after_load: mem_after,
+                    after_bench: mem_bench,
+                    load_delta: mem_delta_load,
+                    bench_delta: mem_delta_bench,
+                },
+                disk: DiskReport {
+                    before_load: disk_before,
+                    after_load: disk_after,
+                    load_delta: disk_delta_load,
+                },
+                network: NetworkReport {
+                    before_load: net_before,
+                    after_load: net_after,
+                    after_bench: net_bench,
+                    load_delta: net_delta_load,
+                    bench_delta: net_delta_bench,
+                },
+                read: ReadReport {
+                    calls_total: reads,
+                    calls_measured: latency.len() as u64,
+                    latency_ns: latency_stats,
+                    rx_bytes_per_call: net_per_call.map(|(rx, _)| rx),
+                    tx_bytes_per_call: net_per_call.map(|(_, tx)| tx),
+                },
+            };
+            let report_path = report.write(&report_dir);
+            info!("[{label}] report:             {}", report_path.display());
 
             info!("[{label}] cleaning up...");
             rt.block_on(backend.cleanup());

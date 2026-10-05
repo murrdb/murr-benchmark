@@ -3,6 +3,7 @@ pub mod backends;
 pub mod bench;
 pub mod codec;
 pub mod config;
+pub mod report;
 pub mod stats;
 pub mod workload;
 pub mod testing;

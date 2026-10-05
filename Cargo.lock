@@ -2472,6 +2472,7 @@ dependencies = [
  "flate2",
  "futures-util",
  "indexmap 2.14.2",
+ "jiff",
  "libc",
  "log",
  "murr",
