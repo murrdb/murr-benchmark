@@ -8,31 +8,31 @@ Benchmarks for [murr](https://github.com/murrdb/murr) — a RocksDB-based NVMe/S
 
 ### Blob layouts
 
-| Engine | Layout | Memory | Disk | Ingestion | p50 latency | Net TX/read |
-|--------|--------|-------:|-----:|----------:|------------:|------------:|
-| murr 0.2.0 mmap | native | 7.5 GiB | 5.9 GiB | 948K rows/s | 268 µs | 42 KiB |
-| Dragonfly 1.31 | blob | 7.3 GiB | — | 4.01M rows/s | 296 µs | 46 KiB |
-| Valkey 8.1 | blob | 8.9 GiB | — | 1.58M rows/s | 657 µs | 46 KiB |
-| Redis 8.6.3 | blob | 9.6 GiB | — | 1.43M rows/s | 815 µs | 46 KiB |
-| pgsql 18.4 | blob | 24.0 GiB | 12.8 GiB | 400K rows/s | 5.69 ms | 62 KiB |
+| Engine | Layout | Memory | Disk | Ingestion | p50 latency | p99 latency | Net TX/read |
+|--------|--------|-------:|-----:|----------:|------------:|------------:|------------:|
+| murr 0.3.0 mmap | native | 6.9 GiB | 5.7 GiB | 784K rows/s | 275 µs | 345 µs | 42 KiB |
+| Dragonfly 2.0.0 | blob | 7.1 GiB | — | 2.65M rows/s | 291 µs | 377 µs | 46 KiB |
+| Redis 8.10.2 | blob | 9.6 GiB | — | 1.50M rows/s | 379 µs | 714 µs | 46 KiB |
+| Valkey 9.1 | blob | 7.5 GiB | — | 1.54M rows/s | 550 µs | 629 µs | 46 KiB |
+| pgsql 18.6 | blob | 30.1 GiB | 12.8 GiB | 361K rows/s | 5.78 ms | 8.50 ms | 62 KiB |
 
 ### Hash / col-per-feature layouts
 
-| Engine | Layout | Memory | Disk | Ingestion | p50 latency | Net TX/read |
-|--------|--------|-------:|-----:|----------:|------------:|------------:|
-| murr 0.2.0 mmap | native | 7.5 GiB | 5.9 GiB | 948K rows/s | 268 µs | 42 KiB |
-| Dragonfly 1.31 | hash | 20.1 GiB | — | 650K rows/s | 2.82 ms | 213 KiB |
-| Valkey 8.1 | hash | 19.4 GiB | — | 378K rows/s | 3.20 ms | 210 KiB |
-| Redis 8.6.3 | hash | 20.1 GiB | — | 398K rows/s | 3.25 ms | 210 KiB |
-| pgsql 18.4 | col | 23.4 GiB | 12.7 GiB | 384K rows/s | 6.54 ms | 86 KiB |
+| Engine | Layout | Memory | Disk | Ingestion | p50 latency | p99 latency | Net TX/read |
+|--------|--------|-------:|-----:|----------:|------------:|------------:|------------:|
+| murr 0.3.0 mmap | native | 6.9 GiB | 5.7 GiB | 784K rows/s | 275 µs | 345 µs | 42 KiB |
+| Dragonfly 2.0.0 | hash | 19.6 GiB | — | 567K rows/s | 2.84 ms | 3.63 ms | 212 KiB |
+| Valkey 9.1 | hash | 19.4 GiB | — | 345K rows/s | 3.31 ms | 4.06 ms | 210 KiB |
+| Redis 8.10.2 | hash | 20.1 GiB | — | 401K rows/s | 3.38 ms | 4.68 ms | 210 KiB |
+| pgsql 18.6 | col | 30.0 GiB | 12.7 GiB | 384K rows/s | 5.66 ms | 6.24 ms | 86 KiB |
 
 ### Disk mode (2 GiB RAM cap)
 
-| Engine | Layout | Memory | Disk | Ingestion | p50 latency | Net TX/read |
-|--------|--------|-------:|-----:|----------:|------------:|------------:|
-| murr 0.2.0 block | native | 1.7 GiB | 5.8 GiB | 1.00M rows/s | 6.33 ms | 42 KiB |
-| pgsql 18.4 | blob | 2.0 GiB | 12.8 GiB | 329K rows/s | 189 ms | 62 KiB |
-| pgsql 18.4 | col | 2.0 GiB | 12.7 GiB | 327K rows/s | 217 ms | 86 KiB |
+| Engine | Layout | Memory | Disk | Ingestion | p50 latency | p99 latency | Net TX/read |
+|--------|--------|-------:|-----:|----------:|------------:|------------:|------------:|
+| murr 0.3.0 block | native | 1.8 GiB | 5.6 GiB | 1.11M rows/s | 5.13 ms | 5.68 ms | 42 KiB |
+| pgsql 18.6 | blob | 1.9 GiB | 12.8 GiB | 363K rows/s | 182 ms | 271 ms | 62 KiB |
+| pgsql 18.6 | col | 1.9 GiB | 12.7 GiB | 317K rows/s | 206 ms | 282 ms | 86 KiB |
 
 ## Benchmark methodology
 

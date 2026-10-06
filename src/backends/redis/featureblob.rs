@@ -1,8 +1,15 @@
+use std::borrow::Cow;
+use std::sync::Arc;
+
 use redis::AsyncCommands;
 use serde::Deserialize;
 
-use crate::backend::{Backend, Batch};
-use crate::config::{BackendConfig, BenchConfig};
+use crate::backend::Backend;
+use crate::codec::blob::BlobRow;
+use crate::codec::key::StringKey;
+use crate::codec::{KeyEncoder, RowEncoder};
+use crate::config::{BackendConfig, DbConfig};
+use crate::workload::{Request, RowBatch, Schema};
 
 use super::RedisContainer;
 
@@ -20,13 +27,15 @@ impl BackendConfig for RedisFeatureBlobConfig {}
 #[derive(Clone)]
 pub struct RedisFeatureBlob {
     redis: RedisContainer,
+    key: StringKey,
+    blob: BlobRow,
 }
 
 impl Backend for RedisFeatureBlob {
     type Config = RedisFeatureBlobConfig;
     type Response = Vec<Option<Vec<u8>>>;
 
-    async fn init(config: &BenchConfig<Self::Config>) -> Self {
+    async fn init(config: &DbConfig<Self::Config>, schema: Arc<Schema>) -> Self {
         let redis = RedisContainer::start(
             &config.backend.image,
             config.backend.cgroup_memory_mb,
@@ -34,26 +43,28 @@ impl Backend for RedisFeatureBlob {
             &config.backend.wait_log,
         )
         .await;
-        RedisFeatureBlob { redis }
+        RedisFeatureBlob {
+            redis,
+            key: StringKey::new(&schema),
+            blob: BlobRow::new(&schema),
+        }
     }
 
-    async fn write_batch(&self, batch: &Batch) {
+    async fn write_batch(&self, batch: &RowBatch) {
         let mut con = self.redis.con.clone();
-        let value_cols = batch.value_columns();
 
-        let mut items: Vec<(&str, Vec<u8>)> = Vec::with_capacity(batch.keys.len());
-        for (row, key) in batch.keys.iter().enumerate() {
-            let mut blob = Vec::with_capacity(value_cols.len() * 4);
-            for col in &value_cols {
-                blob.extend_from_slice(&col.value(row).to_le_bytes());
-            }
-            items.push((key.as_str(), blob));
+        let mut items: Vec<(Cow<str>, Vec<u8>)> = Vec::with_capacity(batch.rows.len());
+        for row in &batch.rows {
+            let mut blob = Vec::new();
+            self.blob.encode(row, &mut blob);
+            items.push((self.key.encode(&row.key), blob));
         }
         let _: () = con.mset(&items).await.unwrap();
     }
 
-    async fn read(&self, keys: &[String], _columns: &[String]) -> Self::Response {
+    async fn read(&self, request: &Request) -> Self::Response {
         let mut con = self.redis.con.clone();
+        let keys: Vec<Cow<str>> = request.keys.iter().map(|k| self.key.encode(k)).collect();
         con.mget(keys).await.unwrap()
     }
 
@@ -77,15 +88,12 @@ impl Backend for RedisFeatureBlob {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::BenchConfig;
+    use crate::config::DbConfig;
     use crate::testing::test_backend_roundtrip;
 
     #[tokio::test]
     async fn roundtrip() {
-        let config = BenchConfig {
-            total_rows: 100,
-            select_rows: 10,
-            select_cols: 2,
+        let config = DbConfig {
             write_batch_size: 50,
             measurement_time_secs: 1,
             warmup_time_secs: 1,

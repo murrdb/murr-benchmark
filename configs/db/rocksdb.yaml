@@ -1,0 +1,34 @@
+write_batch_size: 1000000
+measurement_time_secs: 30
+warmup_time_secs: 5
+sample_size: 50
+backend:
+  # Two table formats, each run single-threaded and with murr's rayon fan-out, so the
+  # in-process backends compare at equal parallelism. Every variant uses its own data_dir
+  # so the previous variant's SSTs don't bleed into the next run.
+  # Unset table options default to murr 0.3.0's PlainConfig / BlockConfig defaults.
+  #
+  # read_method (same names as murr's ReadMethod):
+  #   get               sequential point get per key
+  #   par_get           point get per key, fanned out over rayon      (murr plain default)
+  #   multi_get         one batched_multi_get, RocksDB sorts internally
+  #   multi_get_sorted  pre-sort keys client-side, batched_multi_get with sorted_input
+  #   par_multi_get     keys chunked per rayon thread, batched_multi_get per chunk (murr block default)
+
+  plain-get:
+    data_dir: "/tmp/murr-bench-rocksdb-plain-get"
+    table_format: plain
+    read_method: get
+  plain-par_get:
+    data_dir: "/tmp/murr-bench-rocksdb-plain-par-get"
+    table_format: plain
+    read_method: par_get
+
+  block-multi_get:
+    data_dir: "/tmp/murr-bench-rocksdb-block-multi-get"
+    table_format: block_based
+    read_method: multi_get
+  block-par_multi_get:
+    data_dir: "/tmp/murr-bench-rocksdb-block-par-multi-get"
+    table_format: block_based
+    read_method: par_multi_get

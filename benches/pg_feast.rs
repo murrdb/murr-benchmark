@@ -7,7 +7,7 @@ fn bench_pg_feast(c: &mut criterion::Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    Bench::run::<PgFeast>(c, "configs/pg_feast.yaml", "pg_feast", &rt);
+    Bench::run::<PgFeast>(c, "configs/db/pg_feast.yaml", "pg_feast", &rt);
 }
 
 criterion_group!(benches, bench_pg_feast);

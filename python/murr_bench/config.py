@@ -99,16 +99,18 @@ class RocksDbConfig(BenchConfig):
         data_block_hash_ratio: float = 0.75
 
         # Common Options.
+        write_buffer_size: int = 256 * 1024 * 1024
+        target_file_size_base: int = 1024 * 1024 * 1024
+        disable_auto_compactions: bool = False
         mmap_reads: bool = True
         use_direct_reads: bool = False
         async_io: bool = True
         verify_checksums: bool = False
 
         # Read-path. rocksdict only exposes a single Rdict.get(list) multi_get path,
-        # so these are accepted for YAML compatibility with the Rust config but have
+        # so this is accepted for YAML compatibility with the Rust config but has
         # no effect on the Python harness.
-        batched_multi_get: bool = True
-        sorted_input: bool = True
+        read_method: str | None = None
 
     backend: Backend
 

@@ -1,3 +1,5 @@
 /target/
 .perf
+/reports/
 .cargo
+configs/workload/dh/

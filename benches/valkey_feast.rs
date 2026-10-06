@@ -7,7 +7,7 @@ fn bench_valkey_feast(c: &mut criterion::Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    Bench::run::<RedisFeast>(c, "configs/valkey_feast.yaml", "valkey_feast", &rt);
+    Bench::run::<RedisFeast>(c, "configs/db/valkey_feast.yaml", "valkey_feast", &rt);
 }
 
 criterion_group!(benches, bench_valkey_feast);

@@ -7,7 +7,7 @@ fn bench_dragonfly_feast(c: &mut criterion::Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    Bench::run::<RedisFeast>(c, "configs/dragonfly_feast.yaml", "dragonfly_feast", &rt);
+    Bench::run::<RedisFeast>(c, "configs/db/dragonfly_feast.yaml", "dragonfly_feast", &rt);
 }
 
 criterion_group!(benches, bench_dragonfly_feast);

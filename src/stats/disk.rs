@@ -3,7 +3,9 @@ use std::path::Path;
 
 use bollard::Docker;
 use bollard::query_parameters::InspectContainerOptions;
+use serde::Serialize;
 
+#[derive(Clone, Copy, Serialize)]
 pub struct DiskUsage {
     pub used_bytes: u64,
 }

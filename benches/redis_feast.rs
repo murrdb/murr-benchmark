@@ -7,7 +7,7 @@ fn bench_redis_feast(c: &mut criterion::Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    Bench::run::<RedisFeast>(c, "configs/redis_feast.yaml", "redis_feast", &rt);
+    Bench::run::<RedisFeast>(c, "configs/db/redis_feast.yaml", "redis_feast", &rt);
 }
 
 criterion_group!(benches, bench_redis_feast);

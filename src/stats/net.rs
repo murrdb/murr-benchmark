@@ -3,7 +3,9 @@ use std::fmt;
 use bollard::query_parameters::StatsOptionsBuilder;
 use bollard::Docker;
 use futures_util::StreamExt;
+use serde::Serialize;
 
+#[derive(Clone, Copy, Serialize)]
 pub struct NetworkUsage {
     pub rx_bytes: u64,
     pub tx_bytes: u64,

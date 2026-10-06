@@ -7,7 +7,7 @@ fn bench_redis_featureblob(c: &mut criterion::Criterion) {
         .enable_all()
         .build()
         .unwrap();
-    Bench::run::<RedisFeatureBlob>(c, "configs/redis_featureblob.yaml", "redis_featureblob", &rt);
+    Bench::run::<RedisFeatureBlob>(c, "configs/db/redis_featureblob.yaml", "redis_featureblob", &rt);
 }
 
 criterion_group!(benches, bench_redis_featureblob);
