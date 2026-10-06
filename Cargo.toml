@@ -31,6 +31,7 @@ bollard = "0.21"
 futures-util = "0.3"
 libc = "0.2"
 rocksdb = { version = "0.25", features = ["jemalloc"] }
+rayon = "1"
 tikv-jemallocator = "0.7"
 tokio-postgres = "0.7"
 

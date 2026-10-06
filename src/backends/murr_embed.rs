@@ -38,6 +38,15 @@ impl Backend for MurrEmbed {
 
     async fn init(config: &DbConfig<Self::Config>, schema: Arc<Schema>) -> Self {
         let data_dir = &config.backend.data_dir;
+        // A leftover store (e.g. from an interrupted load) would reopen with the `bench`
+        // table already present and skew the results; always start from an empty dir.
+        if data_dir.exists() {
+            log::warn!(
+                "murr_embed data_dir {} already exists; removing stale data",
+                data_dir.display()
+            );
+            std::fs::remove_dir_all(data_dir).expect("failed to remove stale data_dir");
+        }
         std::fs::create_dir_all(data_dir).expect("failed to create data_dir");
 
         let murr_config = Config {

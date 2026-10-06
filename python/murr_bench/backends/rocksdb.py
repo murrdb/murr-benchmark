@@ -11,6 +11,7 @@ from rocksdict import (
     Cache,
     DataBlockIndexType,
     KeyEncodingType,
+    MemtableFactory,
     Options,
     PlainTableFactoryOptions,
     Rdict,
@@ -33,6 +34,9 @@ class RocksDb(Backend):
         cfg = self.config.backend
         opts = Options()
         opts.create_if_missing(True)
+        opts.set_write_buffer_size(cfg.write_buffer_size)
+        opts.set_target_file_size_base(cfg.target_file_size_base)
+        opts.set_disable_auto_compactions(cfg.disable_auto_compactions)
 
         if cfg.table_format == "block_based":
             block_opts = BlockBasedOptions()
@@ -70,6 +74,8 @@ class RocksDb(Backend):
             # PlainTable requires mmap and a prefix extractor (noop = whole key).
             opts.set_allow_mmap_reads(True)
             opts.set_prefix_extractor(SliceTransform.create_noop())
+            # murr uses a Vector memtable for PlainTable (append-only, sorted at flush).
+            opts.set_memtable_factory(MemtableFactory.vector())
             plain_opts = PlainTableFactoryOptions()
             plain_opts.user_key_length = 0
             plain_opts.bloom_bits_per_key = cfg.plain_bloom_bits_per_key
@@ -118,6 +124,8 @@ class RocksDb(Backend):
 
         for row_idx, key in enumerate(keys):
             self._db[key] = values[row_idx].tobytes()
+        # murr flushes the memtable after every write call; mirror it.
+        self._db.flush()
 
     async def read(self, keys: list[str], columns: list[str]) -> pd.DataFrame:
         assert self._db is not None

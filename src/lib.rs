@@ -1,3 +1,8 @@
+/// jemalloc for every bench, test and example that links this crate, matching the murr
+/// server binary and RocksDB's internal allocator (`rocksdb/jemalloc` feature).
+#[global_allocator]
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 pub mod backend;
 pub mod backends;
 pub mod bench;

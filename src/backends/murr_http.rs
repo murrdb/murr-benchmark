@@ -1,18 +1,18 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use testcontainers::core::ContainerAsync;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{GenericImage, ImageExt};
 
+use murr::api::fetch::COLUMNS_METADATA;
 use murr::conf::{BackendConfig as StorageBackend, StorageConfig};
 use murr::core::TableSchema;
 
 use crate::backend::Backend;
-use crate::codec::arrow::ArrowBatch;
-use crate::codec::json::JsonKeys;
+use crate::codec::arrow::{ArrowBatch, ArrowKeys};
 use crate::codec::{BatchEncoder, KeySetEncoder};
 use crate::config::{BackendConfig, DbConfig};
 use crate::workload::{Request, RowBatch, Schema};
@@ -43,7 +43,7 @@ pub struct MurrHttp {
     base_url: String,
     _container: Arc<ContainerAsync<GenericImage>>,
     rows: ArrowBatch,
-    keys: JsonKeys,
+    keys: ArrowKeys,
 }
 
 impl MurrHttp {
@@ -116,7 +116,7 @@ impl Backend for MurrHttp {
             base_url,
             _container: Arc::new(container),
             rows: ArrowBatch::new(schema.clone()),
-            keys: JsonKeys::new(schema),
+            keys: ArrowKeys::new(schema),
         }
     }
 
@@ -147,15 +147,33 @@ impl Backend for MurrHttp {
     }
 
     async fn read(&self, request: &Request) -> Self::Response {
-        let body = json!({
-            "keys": self.keys.encode(&request.keys),
-            "columns": request.columns,
-        });
+        // An IPC fetch request is the key columns as a batch, with the columns
+        // to return listed in the schema metadata.
+        let keys = self.keys.encode(&request.keys);
+        let columns = serde_json::to_string(&request.columns).expect("failed to encode columns");
+        let schema = keys
+            .schema()
+            .as_ref()
+            .clone()
+            .with_metadata(HashMap::from([(COLUMNS_METADATA.to_string(), columns)]));
+        let keys = keys
+            .with_schema(Arc::new(schema))
+            .expect("failed to attach columns metadata");
+        let mut buf = Vec::new();
+        {
+            let mut writer =
+                arrow::ipc::writer::StreamWriter::try_new(&mut buf, keys.schema().as_ref())
+                    .expect("failed to create IPC writer");
+            writer.write(&keys).expect("failed to write keys");
+            writer.finish().expect("failed to finish IPC stream");
+        }
+
         let resp = self
             .client
             .post(format!("{}/api/v1/table/bench/fetch", self.base_url))
+            .header("content-type", "application/vnd.apache.arrow.stream")
             .header("accept", "application/vnd.apache.arrow.stream")
-            .json(&body)
+            .body(buf)
             .send()
             .await
             .unwrap();

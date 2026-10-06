@@ -19,7 +19,7 @@ backend:
       # disable_auto_compactions: false
       # read_method: par_get
 
-  block:
+  block-2g:
     image: "ghcr.io/murrdb/murr:0.3.0"
     cgroup_memory_mb: 2048
     block: {}
@@ -40,3 +40,7 @@ backend:
       # target_file_size_base: 1073741824 # 1 GiB
       # disable_auto_compactions: false
       # read_method: multi_get
+  block:
+    image: "ghcr.io/murrdb/murr:0.3.0"
+    cgroup_memory_mb: 2048
+    block: {}

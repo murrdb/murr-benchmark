@@ -59,8 +59,9 @@ impl LatencyRecorder {
         }
         sorted.sort_unstable();
 
-        let percentile = |p: f64| {
-            let rank = (p / 100.0 * sorted.len() as f64).ceil() as usize;
+        // Integer per-mille ranks: float math rounds 99.9% of 1000 up to rank 1000.
+        let percentile = |per_mille: usize| {
+            let rank = (sorted.len() * per_mille).div_ceil(1000);
             sorted[rank.clamp(1, sorted.len()) - 1]
         };
         let sum: u128 = sorted.iter().map(|&ns| ns as u128).sum();
@@ -68,10 +69,10 @@ impl LatencyRecorder {
         Some(LatencyStats {
             mean: sum as f64 / sorted.len() as f64,
             min: sorted[0],
-            p50: percentile(50.0),
-            p90: percentile(90.0),
-            p99: percentile(99.0),
-            p999: percentile(99.9),
+            p50: percentile(500),
+            p90: percentile(900),
+            p99: percentile(990),
+            p999: percentile(999),
             max: sorted[sorted.len() - 1],
         })
     }

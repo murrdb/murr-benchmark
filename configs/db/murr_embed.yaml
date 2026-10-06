@@ -3,9 +3,13 @@ measurement_time_secs: 30
 warmup_time_secs: 2
 sample_size: 50
 backend:
-  mmap:
-    data_dir: /tmp/murr-bench-embed-mmap
-    mmap: {}
+  # Each storage mode runs single-threaded and with murr's default rayon fan-out, matching
+  # the rocksdb variants (plain-get / plain-par_get, block-multi_get / block-par_multi_get).
+  # read_method: get | par_get | multi_get | multi_get_sorted | par_multi_get
+  mmap-get:
+    data_dir: /tmp/murr-bench-embed-mmap-get
+    mmap:
+      read_method: get
       # bloom_bits_per_key: 16
       # hash_table_ratio: 0.75            # PlainTable hash utilization (lower = fewer collisions, more space)
       # index_sparseness: 4               # stride between sparse-index entries (lower = faster, more memory)
@@ -14,10 +18,15 @@ backend:
       # write_buffer_size: 268435456      # 256 MiB
       # target_file_size_base: 1073741824 # 1 GiB
       # disable_auto_compactions: false
+  mmap-par_get:
+    data_dir: /tmp/murr-bench-embed-mmap-par-get
+    mmap:
+      read_method: par_get                # murr default
 
-  block:
-    data_dir: /tmp/murr-bench-embed-block
-    block: {}
+  block-multi_get:
+    data_dir: /tmp/murr-bench-embed-block-multi-get
+    block:
+      read_method: multi_get
       # bloom_filter_bits_per_key: null  # null = bloom disabled
       # whole_key_filtering: true        # only meaningful when bloom is enabled
       # block_size: 512
@@ -34,3 +43,7 @@ backend:
       # write_buffer_size: 268435456     # 256 MiB
       # target_file_size_base: 1073741824 # 1 GiB
       # disable_auto_compactions: false
+  block-par_multi_get:
+    data_dir: /tmp/murr-bench-embed-block-par-multi-get
+    block:
+      read_method: par_multi_get          # murr default

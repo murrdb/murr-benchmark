@@ -1,10 +1,6 @@
 use criterion::{criterion_group, criterion_main};
 use murr_benchmark::backends::murr_embed::MurrEmbed;
 use murr_benchmark::bench::Bench;
-use tikv_jemallocator::Jemalloc;
-
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
 
 fn bench_murr_embed(c: &mut criterion::Criterion) {
     let rt = tokio::runtime::Builder::new_current_thread()
